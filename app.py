@@ -1,7 +1,7 @@
 """
 app.py
 Entry point — loads CSV directly, trains models, tab routing.
-Owner: Person C
+
 
 Run:
     streamlit run app.py

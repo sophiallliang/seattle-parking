@@ -1,7 +1,7 @@
 """
 pages/explore.py
 Tab 3 — EDA visualizations and data insights.
-Owner: Person A
+
 """
 
 import streamlit as st

@@ -1,7 +1,7 @@
 """
 pages/overview.py
 Tab 1 — high-level summary of Belltown parking patterns.
-Owner: Person A
+
 """
 
 import streamlit as st

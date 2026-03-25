@@ -1,7 +1,7 @@
 """
 model.py
 Model training, evaluation, and prediction logic.
-Owner: Person B
+
 """
 
 import numpy as np

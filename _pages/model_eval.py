@@ -1,7 +1,7 @@
 """
 pages/model_eval.py
 Tab 4 — model performance, feature importance, confusion matrix.
-Owner: Person B
+
 """
 
 import streamlit as st

@@ -1,7 +1,7 @@
 """
 pages/predict.py
 Tab 2 — interactive occupancy prediction.
-Owner: Person C
+
 """
 
 import datetime

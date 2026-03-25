@@ -1,7 +1,7 @@
 """
 data_loader.py
 Handles data loading, cleaning, hourly aggregation, and feature engineering.
-Owner: Person A
+
 """
 
 import pandas as pd
