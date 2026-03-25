@@ -89,10 +89,10 @@ for name, m in regressors.items():
 
 # ── Tab routing ──────────────────────────────────────────────
 tab1, tab2, tab3, tab4 = st.tabs([
-    "📊 Overview",
-    "🔮 Predict",
-    "🔍 Explore",
-    "🧠 Model",
+    "Overview",
+    "Predict",
+    "Explore",
+    "Model",
 ])
 
 with tab1:

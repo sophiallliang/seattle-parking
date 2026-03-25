@@ -25,12 +25,12 @@ streamlit run app.py
 
 ## App tabs
 
-| Tab         | Description                                          |
-| ----------- | ---------------------------------------------------- |
-| 📊 Overview | Daily trends, peak hours, busiest days               |
-| 🔮 Predict  | Select block + time + weather → occupancy prediction |
-| 🔍 Explore  | Heatmaps, distributions, weekday vs weekend          |
-| 🧠 Model    | R² comparison, feature importance, confusion matrix  |
+| Tab      | Description                                          |
+| -------- | ---------------------------------------------------- |
+| Overview | Daily trends, peak hours, busiest days               |
+| Predict  | Select block + time + weather → occupancy prediction |
+| Explore  | Heatmaps, distributions, weekday vs weekend          |
+| Model    | R² comparison, feature importance, confusion matrix  |
 
 ## Collaboration
 
