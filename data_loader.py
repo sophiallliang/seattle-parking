@@ -95,12 +95,20 @@ def _aggregate_hourly(df: pd.DataFrame) -> pd.DataFrame:
     df["month"]    = df["datetime"].dt.month
     df["date"]     = df["datetime"].dt.date
 
-    agg = df.groupby(["block", "date", "hour"]).agg(
-        occ_rate=("occ_rate", "mean"),
-        capacity=("capacity", "first"),
-        dow     =("dow",      "first"),
-        month   =("month",    "first"),
-    ).reset_index()
+    agg_dict = {
+        "occ_rate": ("occ_rate", "mean"),
+        "capacity": ("capacity", "first"),
+        "dow":      ("dow",      "first"),
+        "month":    ("month",    "first"),
+    }
+    if "location" in df.columns:
+        agg_dict["location"] = ("location", "first")
+    if "rate" in df.columns:
+        agg_dict["rate"] = ("rate", "mean")
+    if "time_limit" in df.columns:
+        agg_dict["time_limit"] = ("time_limit", "first")
+
+    agg = df.groupby(["block", "date", "hour"]).agg(**agg_dict).reset_index()
 
     return agg
 
@@ -136,6 +144,23 @@ def _build_mean_lookup(df_full: pd.DataFrame) -> dict:
         .rename(columns={"occ_rate": "blockface_dow_mean"})
     )
 
+    # Blockface locations lookup
+    if "location" in df_full.columns:
+        bf_loc = df_full.groupby("block").agg(location=("location", "first")).reset_index()
+        if "time_limit" in df_full.columns:
+            tl = df_full.groupby("block")["time_limit"].first().reset_index()
+            bf_loc = bf_loc.merge(tl, on="block", how="left")
+            
+        bf_loc["lon"] = bf_loc["location"].str.extract(r'POINT \(([-\d\.]+) ([-\d\.]+)\)')[0].astype(float)
+        bf_loc["lat"] = bf_loc["location"].str.extract(r'POINT \(([-\d\.]+) ([-\d\.]+)\)')[1].astype(float)
+        bf_loc = bf_loc.dropna(subset=["lon", "lat"])
+        st.session_state["bf_loc"] = bf_loc
+
+    # Aggregate hourly prices into the hourly lookups
+    if "rate" in df_full.columns:
+        bf_rate = df_full.groupby(["block", "hour"])["rate"].mean().reset_index()
+        bf_hour_mean = bf_hour_mean.merge(bf_rate, on=["block", "hour"], how="left")
+
     # Also store for prediction-time lookup
     st.session_state["bf_mean"]      = bf_mean
     st.session_state["bf_hour_mean"] = bf_hour_mean
@@ -145,6 +170,7 @@ def _build_mean_lookup(df_full: pd.DataFrame) -> dict:
         "bf_mean":      bf_mean,
         "bf_hour_mean": bf_hour_mean,
         "bf_dow_mean":  bf_dow_mean,
+        "bf_loc":       bf_loc if "location" in df_full.columns else pd.DataFrame()
     }
 
 
@@ -204,7 +230,7 @@ def load_and_clean(filepath: str) -> pd.DataFrame:
             chunk = chunk.rename(
                 columns={k: v for k, v in COL_MAP.items() if k in chunk.columns}
             )
-            chunk["datetime"] = pd.to_datetime(chunk["datetime"], errors="coerce")
+            chunk["datetime"] = pd.to_datetime(chunk["datetime"], format="mixed", errors="coerce")
             chunk = chunk.dropna(subset=["datetime"])
             chunk["_month"] = chunk["datetime"].dt.month
             for m in chunk["_month"].unique():
@@ -306,7 +332,7 @@ def load_and_clean(filepath: str) -> pd.DataFrame:
     df["occ_cat"]  = pd.cut(df["occ_rate"], bins=OCC_BINS, labels=OCC_LABELS)
     df["day_type"] = df["is_weekend"].map({0: "Weekday", 1: "Weekend"})
 
-    return df.dropna(subset=["occ_rate", "occ_cat"]).reset_index(drop=True)
+    return df.dropna(subset=["occ_rate", "occ_cat"]).reset_index(drop=True), lookup
 
 
 # ── Prediction input builder ─────────────────────────────────
