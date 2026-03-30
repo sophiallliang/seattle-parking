@@ -11,6 +11,8 @@ import plotly.graph_objects as go
 import pydeck as pdk
 import pandas as pd
 
+import folium
+from streamlit_folium import st_folium
 from data_loader import build_input_row, FEATURES
 from model import predict, MODEL_NAMES, quality_label
 
@@ -34,6 +36,21 @@ LANDMARKS = {
     "Amazon Spheres": (47.6158, -122.3396)
 }
 
+@st.cache_data(show_spinner=False, ttl=3600)
+def geocode_address(address: str):
+    """Convert a free-text address to (lat, lon) using Nominatim (no API key needed)."""
+    import requests
+    try:
+        params = {"q": address + ", Seattle, WA", "format": "json", "limit": 1}
+        headers = {"User-Agent": "SeattleParkingPredictor/1.0"}
+        resp = requests.get("https://nominatim.openstreetmap.org/search", params=params, headers=headers, timeout=5)
+        data = resp.json()
+        if data:
+            return float(data[0]["lat"]), float(data[0]["lon"])
+    except Exception:
+        pass
+    return None
+
 def render(regressors: dict, clf, reg_results: dict, train_df: pd.DataFrame) -> None:
     st.header("Interactive Map")
 
@@ -51,6 +68,7 @@ def render(regressors: dict, clf, reg_results: dict, train_df: pd.DataFrame) -> 
             sel_model = st.selectbox("Model", MODEL_NAMES, index=MODEL_NAMES.index("Random Forest") if "Random Forest" in MODEL_NAMES else 0, key="map_model_global")
             sel_day  = st.selectbox("Day of week", DAYS, key="map_day_global")
             sel_landmark = st.selectbox("Search Destination", list(LANDMARKS.keys()), key="map_landmark")
+            custom_addr = st.text_input("📍 Or type any address", placeholder="e.g. 1st Ave & Pike St", key="map_custom_addr")
             
         with col2:
             sel_hour = st.slider("Hour of day", 7, 22, 14, format="%d:00", key="map_hour_global")
@@ -62,7 +80,6 @@ def render(regressors: dict, clf, reg_results: dict, train_df: pd.DataFrame) -> 
             sel_weather = st.selectbox("Weather conditions", list(WEATHER_OPTIONS.keys()), key="map_weather_global")
             sel_holiday = st.checkbox("Public holiday", key="map_holiday_global")
             enable_anim = st.checkbox("Enable Daily Animation (ignores 'Hour' slider)", key="map_anim")
-            color_by_price = st.checkbox("Color Map by Hourly Rate ($/hr)", key="map_pricing")
 
     sel_temp, sel_precip = WEATHER_OPTIONS[sel_weather]
     dow_val = DAYS.index(sel_day)
@@ -72,12 +89,29 @@ def render(regressors: dict, clf, reg_results: dict, train_df: pd.DataFrame) -> 
     if "time_limit" in bf_loc.columns:
         bf_loc = bf_loc[bf_loc["time_limit"].fillna(0) >= sel_time_limit]
         
-    if sel_landmark != "None":
-        l_lat, l_lon = LANDMARKS[sel_landmark]
+    # Resolve destination: custom address overrides landmark dropdown
+    dest_label = None
+    dest_coords = None
+
+    if st.session_state.get("map_custom_addr", "").strip():
+        addr = st.session_state["map_custom_addr"].strip()
+        with st.spinner(f"Geocoding '{addr}'..."):
+            coords = geocode_address(addr)
+        if coords:
+            dest_coords = coords
+            dest_label = addr
+        else:
+            st.warning(f"Could not find '{addr}' on the map. Try a more specific Seattle address.")
+    elif sel_landmark != "None":
+        dest_coords = LANDMARKS[sel_landmark]
+        dest_label = sel_landmark
+
+    if dest_coords:
+        l_lat, l_lon = dest_coords
         dist = np.sqrt((bf_loc["lat"] - l_lat)**2 + (bf_loc["lon"] - l_lon)**2)
         bf_loc = bf_loc[dist < 0.006]
         if bf_loc.empty:
-            st.warning(f"No parking blocks found within walking distance of {sel_landmark} with current filters.")
+            st.warning(f"No parking blocks found within walking distance of '{dest_label}' with current filters.")
             return
 
     global_mean = float(train_df["occ_rate"].mean())
@@ -101,21 +135,17 @@ def render(regressors: dict, clf, reg_results: dict, train_df: pd.DataFrame) -> 
         m_df = m_df.merge(bf_mean_tbl[["block", "blockface_mean"]], on="block", how="left")
         
         hm_cols = ["block", "blockface_hour_mean"]
-        if "rate" in bf_hour_mean_tbl.columns:
-            hm_cols.append("rate")
             
         hm_df = bf_hour_mean_tbl[bf_hour_mean_tbl["hour"] == target_hour][hm_cols] if not bf_hour_mean_tbl.empty else pd.DataFrame(columns=hm_cols)
         dm_df = bf_dow_mean_tbl[bf_dow_mean_tbl["dow"] == dow_val][["block", "blockface_dow_mean"]] if not bf_dow_mean_tbl.empty else pd.DataFrame(columns=["block", "blockface_dow_mean"])
+
+        m_df = m_df.merge(hm_df,  on="block", how="left")
+        m_df = m_df.merge(dm_df,  on="block", how="left")
         
-        m_df = m_df.merge(hm_df, on="block", how="left")
-        m_df = m_df.merge(dm_df, on="block", how="left")
-        
-        m_df["blockface_mean"] = m_df["blockface_mean"].fillna(global_mean)
+        m_df["blockface_mean"]      = m_df["blockface_mean"].fillna(global_mean)
         m_df["blockface_hour_mean"] = m_df["blockface_hour_mean"].fillna(global_mean)
-        m_df["blockface_dow_mean"] = m_df["blockface_dow_mean"].fillna(global_mean)
+        m_df["blockface_dow_mean"]  = m_df["blockface_dow_mean"].fillna(global_mean)
         
-        if "rate" in m_df.columns:
-            m_df["rate"] = m_df["rate"].fillna(0)
 
         m_df["hour"] = target_hour
         m_df["dow"]  = dow_val
@@ -165,74 +195,83 @@ def render(regressors: dict, clf, reg_results: dict, train_df: pd.DataFrame) -> 
     else:
         st.markdown("### Interactive Prediction Map")
 
-    color_col = "rate" if color_by_price and "rate" in final_map_df.columns else "predicted_occ"
 
-    c_scale = "Blues" if color_col == "rate" else ["#00cc96", "#ffa15a", "#ef553b"]
-    c_range = None if color_col == "rate" else [0, 1]
-    hover_data = {"predicted_occ": ":.0%", "lat": False, "lon": False}
-    if "rate" in final_map_df.columns:
-        hover_data["rate"] = ":.2f"
-
-    fig = px.scatter_mapbox(
-        final_map_df, lat="lat", lon="lon", hover_name="block", custom_data=["block"],
-        hover_data=hover_data, color=color_col, color_continuous_scale=c_scale,
-        range_color=c_range, size_max=15, zoom=14.5 if sel_landmark == "None" else 15.5, 
-        opacity=0.8, template="plotly_dark",
-        labels={"predicted_occ": "Predicted Occ", "rate": "Price $/hr", "hour_str": "Time", "customdata[0]": "Block"},
-        **anim_kw
-    )
-    fig.update_layout(mapbox_style="carto-darkmatter")
-    fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
-    fig.update_layout(clickmode="event+select")
-
-    # If animation is active, Plotly selection conflicts with the slider. So we only enable selection if not animating.
+    # Animation mode: use Plotly (it renders time slider frames)
     if enable_anim:
+        hover_data = {"predicted_occ": ":.0%", "lat": False, "lon": False}
+        fig = px.scatter_mapbox(
+            final_map_df, lat="lat", lon="lon", hover_name="block",
+            color_continuous_scale=["#00cc96", "#ffa15a", "#ef553b"],
+            range_color=[0, 1], size_max=15, zoom=14.5 if dest_label is None else 15.5,
+            opacity=0.8, template="plotly_dark",
+            labels={"predicted_occ": "Predicted Occ", "hour_str": "Time"},
+            animation_frame="hour_str"
+        )
+        fig.update_layout(mapbox_style="carto-darkmatter", margin={"r":0,"t":0,"l":0,"b":0})
         st.plotly_chart(fig, use_container_width=True)
         st.info("Animation mode is active. Turn off 'Enable Daily Animation' to click on individual blocks.")
-        event = None
-    else:
-        event = st.plotly_chart(fig, use_container_width=True, on_select="rerun", selection_mode="points", key="plotly_map")
+        return
 
-    # ── 5. Destination Routing Recommendations ──────────────────
-    if sel_landmark != "None" and not enable_anim:
-        st.markdown(f"**Top 3 Easiest Parking blocks near {sel_landmark} at {sel_hour}:00**")
-        top3 = final_map_df.sort_values("predicted_occ").head(3)
-        for _, row in top3.iterrows():
-            rate_str = f" - ${row['rate']:.2f}/hr" if "rate" in row else ""
-            st.write(f"- `{row['block']}` (Predicted Occupancy: **{row['predicted_occ']:.0%}**{rate_str})")
-        st.markdown("---")
+    # Static mode: use Folium for reliable single-click marker selection
+    center_lat = final_map_df["lat"].mean() if not final_map_df.empty else 47.61
+    center_lon = final_map_df["lon"].mean() if not final_map_df.empty else -122.34
+    zoom = 15 if sel_landmark == "None" else 16
 
-    sel_block_fallback = st.selectbox(
-        "🔍 Pick a Block manually to see detailed predictions (Fallback if map click is unresponsive):", 
-        ["None"] + final_map_df["block"].tolist()
+    m = folium.Map(
+        location=[center_lat, center_lon],
+        zoom_start=zoom,
+        tiles="CartoDB dark_matter"
     )
 
-    # If they manually select from the dropdown, override the map click
-    if sel_block_fallback != "None":
-        st.session_state["sel_map_block"] = sel_block_fallback
+    def occ_to_color(occ):
+        if occ < 0.4: return "#00cc96"
+        elif occ < 0.7: return "#ffa15a"
+        else: return "#ef553b"
 
-    try:
-        # Reverting back to the original correctly functioning attribute check
-        if event and hasattr(event, "selection") and event.selection:
-            pts = event.selection.get("points", []) if hasattr(event.selection, "get") else getattr(event.selection, "points", [])
-            
-            if pts and len(pts) > 0:
-                pt = pts[0]
-                pt_dict = pt if isinstance(pt, dict) else pt.__dict__
-                
-                # Forcefully extract the block ID from customdata payload
-                customdata = pt_dict.get("customdata", [])
-                if customdata and len(customdata) > 0:
-                    st.session_state["sel_map_block"] = customdata[0]
-                else:
-                    # Fallback to row index mapping
-                    idx = pt_dict.get("point_index", pt_dict.get("pointIndex", -1))
-                    if idx is not None and 0 <= int(idx) < len(final_map_df):
-                        st.session_state["sel_map_block"] = final_map_df.iloc[int(idx)]["block"]
-    except Exception as e:
-        pass
+    for _, row in final_map_df.iterrows():
+        if pd.isna(row["lat"]) or pd.isna(row["lon"]):
+            continue
+        color = occ_to_color(row["predicted_occ"])
+
+        tooltip_text = f"{row['block']}  {row['predicted_occ']:.0%} occupied"
+
+        folium.CircleMarker(
+            location=[row["lat"], row["lon"]],
+            radius=9,
+            color=color,
+            fill=True,
+            fill_color=color,
+            fill_opacity=0.85,
+            tooltip=tooltip_text,
+            popup=folium.Popup(row["block"], max_width=400),
+        ).add_to(m)
+
+    result = st_folium(m, width="100%", height=480, returned_objects=["last_object_clicked_popup"], key="folium_map")
+
+    st.caption("🖱️ Click any dot to see its prediction · Drag to pan · Scroll to zoom")
+
+    # ── 5. Destination Routing Recommendations ──────────────────
+    if dest_label:
+        st.markdown(f"**5 Nearest Parking blocks to {dest_label} at {sel_hour}:00**")
+        nearby = final_map_df.copy()
+        l_lat, l_lon = dest_coords
+        nearby["dist_m"] = np.sqrt((nearby["lat"] - l_lat)**2 + (nearby["lon"] - l_lon)**2) * 111000
+        nearest5 = nearby.sort_values("dist_m").head(5)
+        for _, row in nearest5.iterrows():
+            dist_label = f"{int(row['dist_m'])}m away"
+            st.write(f"- `{row['block']}` — **{row['predicted_occ']:.0%}** occupied · {dist_label}")
+        st.markdown("---")
+
+    # Capture the clicked marker popup (which is set to the block name)
+    clicked_popup = result.get("last_object_clicked_popup") if result else None
+    if clicked_popup and clicked_popup in final_map_df["block"].values:
+        st.session_state["sel_map_block"] = clicked_popup
 
     sel_block = st.session_state.get("sel_map_block")
+    # Clear stale selection if it's no longer in the current filtered map
+    if sel_block and sel_block not in final_map_df["block"].values:
+        sel_block = None
+        st.session_state.pop("sel_map_block", None)
 
     if not sel_block:
         st.info("👆 Click on any hotspot on the map to see the prediction details for that block.")
@@ -264,8 +303,6 @@ def render(regressors: dict, clf, reg_results: dict, train_df: pd.DataFrame) -> 
         m2.metric("Model R²", f"{r2}")
 
         st.markdown(f"**Category:** :{color}[**{pred_cat} occupancy**] (confidence: {confidence})")
-        if "rate" in selected_row and pd.notna(selected_row["rate"]):
-            st.markdown(f"**Hourly Rate:** ${selected_row['rate']:.2f}/hr")
 
         if "block" in train_df.columns and sel_block in train_df["block"].values:
             mode_vals = train_df[train_df["block"] == sel_block]["capacity"].mode()
