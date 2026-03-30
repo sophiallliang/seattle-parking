@@ -29,7 +29,8 @@ WEATHER_OPTIONS = {
 }
 
 
-def render(regressors: dict, clf, reg_results: dict, train_df: pd.DataFrame) -> None:
+def render(regressors: dict, reg_results: dict,
+           train_df: pd.DataFrame, holdout_results: dict = None) -> None:
     st.header("Predict occupancy")
 
     col_in, col_out = st.columns([1, 1], gap="large")
@@ -48,7 +49,7 @@ def render(regressors: dict, clf, reg_results: dict, train_df: pd.DataFrame) -> 
         st.markdown("---")
 
         sel_day  = st.selectbox("Day of week", DAYS)
-        sel_hour = st.slider("Hour of day", 7, 22, 14, format="%d:00")
+        sel_hour = st.slider("Hour of day", 8, 19, 14, format="%d:00")
 
         current_month = datetime.datetime.now().month
         sel_month = st.selectbox(
@@ -105,11 +106,19 @@ def render(regressors: dict, clf, reg_results: dict, train_df: pd.DataFrame) -> 
         precip_mm=sel_precip,
     )
 
-    result    = predict(regressors, clf, sel_model, input_row)
+    result    = predict(regressors, sel_model, input_row)
     pred_rate = result["rate"]
     pred_cat  = result["category"]
     color     = CAT_COLOR[pred_cat]
-    r2        = reg_results[sel_model]["R²"]
+
+    # Use internal R² if available, otherwise fall back to external
+    if holdout_results and sel_model in holdout_results:
+        r2       = holdout_results[sel_model]["R²"]
+        r2_label = "Model R² (internal)"
+    else:
+        r2       = reg_results[sel_model]["R²"]
+        r2_label = "Model R² (external)"
+
     qlabel, _ = quality_label(r2)
 
     # ── Output panel ─────────────────────────────────────────
@@ -119,11 +128,10 @@ def render(regressors: dict, clf, reg_results: dict, train_df: pd.DataFrame) -> 
         m1, m2 = st.columns(2)
         m1.metric("Predicted occupancy", f"{pred_rate:.0%}")
         m2.metric(
-            "Model R²",
+            r2_label,
             f"{r2}",
             help=(
-                f"External validation (last 30 days): R² = {r2}\n\n"
-                f"Internal validation (20% holdout): R² is higher — "
+                f"Internal validation (20% holdout): R² = {r2}\n\n"
                 "Random Forest is the best model based on internal validation. "
                 "The drop in external R² is expected due to the 3-year gap between training and test data."
             )

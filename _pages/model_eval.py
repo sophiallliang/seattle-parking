@@ -82,7 +82,6 @@ def render(reg_results: dict, cm, clf_acc: float,
         )
 
     # ── Best model callout ───────────────────────────────────
-    # Use internal validation (holdout) to determine best model
     if holdout_results:
         best_model = max(holdout_results, key=lambda x: holdout_results[x]["R²"])
         best_r2    = holdout_results[best_model]["R²"]
@@ -92,41 +91,27 @@ def render(reg_results: dict, cm, clf_acc: float,
         best_r2    = metrics_df["R²"].max()
         best_mae   = metrics_df.loc[metrics_df["R²"].idxmax(), "MAE"]
 
-    explanation = {
-        "Random Forest": (
-            "Random Forest builds hundreds of decision trees independently and averages their predictions. "
-            "It handles the **non-linear relationships** between blockface identity, time of day, and occupancy "
-            "better than Linear Regression, and is more robust to noisy data than XGBoost on this dataset — "
-            "likely because parking occupancy has high variance that benefits from bagging (averaging many trees) "
-            "rather than boosting (correcting errors sequentially)."
-        ),
-        "XGBoost": (
-            "XGBoost builds trees sequentially, each correcting the errors of the previous one. "
-            "It outperforms Random Forest on this test set — likely because the last-30-days data "
-            "has a different distribution from the 2023 training data, and XGBoost's sequential "
-            "error correction generalizes better to this distribution shift than Random Forest's "
-            "independent averaging approach."
-        ),
-        "Linear Regression": (
-            "Linear Regression assumes a straight-line relationship between features and occupancy rate. "
-            "It serves as a useful baseline but cannot capture the complex non-linear patterns in parking data, "
-            "such as the interaction between blockface identity and time of day."
-        ),
-    }
-
     st.caption(
         "R² measures how much variance the model explains (higher = better). "
         "MAE is the average prediction error in occupancy rate (lower = better). "
         f"An R² of {best_r2:.2f} means the model explains {best_r2*100:.0f}% of the variation in parking occupancy."
     )
 
-    # ── R² bar chart ─────────────────────────────────────────
+    # ── R² bar chart (internal holdout) ──────────────────────
+    if holdout_results:
+        bar_df = pd.DataFrame(holdout_results).T.reset_index()
+        bar_df.columns = ["Model", "R²", "MAE"]
+        bar_title = "R² comparison across models (internal 20% holdout)"
+    else:
+        bar_df    = metrics_df[["Model", "R²"]]
+        bar_title = "R² comparison across models (external last 30 days)"
+
     fig_r2 = px.bar(
-        metrics_df, x="Model", y="R²",
+        bar_df, x="Model", y="R²",
         color="R²",
         color_continuous_scale=["#f8d7da", "#fff3cd", "#d4edda"],
         range_color=[0, 1],
-        title="R² comparison across models",
+        title=bar_title,
         text="R²",
     )
     fig_r2.add_hline(y=0.75, line_dash="dash", line_color="gray",
@@ -154,6 +139,7 @@ def render(reg_results: dict, cm, clf_acc: float,
             yaxis={"categoryorder": "total ascending"},
             height=360,
             showlegend=False,
+            
         )
         st.plotly_chart(fig_fi, use_container_width=True)
 

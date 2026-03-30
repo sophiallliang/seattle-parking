@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.linear_model import LinearRegression
 from sklearn.metrics import (
     r2_score, mean_absolute_error, mean_squared_error,
     confusion_matrix, accuracy_score,
@@ -42,34 +42,30 @@ def _build_regressors() -> dict:
 @st.cache_resource(show_spinner=False)
 def train_models(_train_df: pd.DataFrame):
     """
-    Train all regressors + logistic classifier on training data.
-    Returns (regressors dict, classifier, feature_importance Series).
+    Train all regressors on training data.
+    Returns (regressors dict, feature_importance Series).
 
     Prefixing _train_df with _ tells Streamlit not to hash the DataFrame,
     avoiding re-training on every minor state change.
     """
-    X = _train_df[FEATURES]
+    X     = _train_df[FEATURES]
     y_reg = _train_df["occ_rate"]
-    y_clf = _train_df["occ_cat"]
 
     regressors = _build_regressors()
     for m in regressors.values():
         m.fit(X, y_reg)
-
-    clf = LogisticRegression(max_iter=500, random_state=42)
-    clf.fit(X, y_clf)
 
     feat_imp = pd.Series(
         regressors["Random Forest"].feature_importances_,
         index=FEATURES,
     ).sort_values(ascending=False)
 
-    return regressors, clf, feat_imp
+    return regressors, feat_imp
 
 
 # ── Evaluation ───────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
-def evaluate(_regressors, _clf, _test_df: pd.DataFrame) -> dict:
+def evaluate(_regressors, _test_df: pd.DataFrame) -> dict:
     """
     Evaluate all models on the test set.
     Returns a dict with regression metrics, confusion matrix, and accuracy.
@@ -87,14 +83,14 @@ def evaluate(_regressors, _clf, _test_df: pd.DataFrame) -> dict:
             "RMSE": round(float(np.sqrt(mean_squared_error(y_reg, pred))), 4),
         }
 
-    # Predicted vs actual for scatter plot (Random Forest — best model)
+    # Predicted vs actual for scatter plot (Random Forest)
     rf_pred = _regressors["Random Forest"].predict(X_test).clip(0, 1)
     scatter_df = pd.DataFrame({
         "Actual":    y_reg.values,
         "Predicted": rf_pred,
     })
 
-    # Classification using RF predictions + fixed thresholds (consistent with predict())
+    # Classification using RF predictions + fixed thresholds
     rf_cat = pd.cut(rf_pred, bins=[-0.01, 0.4, 0.7, 1.01], labels=OCC_LABELS)
     cm  = confusion_matrix(y_clf, rf_cat, labels=OCC_LABELS)
     acc = round(accuracy_score(y_clf, rf_cat), 3)
@@ -108,7 +104,7 @@ def evaluate(_regressors, _clf, _test_df: pd.DataFrame) -> dict:
 
 
 # ── Prediction ───────────────────────────────────────────────
-def predict(regressors: dict, clf, model_name: str,
+def predict(regressors: dict, model_name: str,
             input_row: pd.DataFrame) -> dict:
     """
     Run a single prediction.

@@ -2,7 +2,6 @@
 app.py
 Entry point — loads CSV directly, trains models, tab routing.
 
-
 Run:
     streamlit run app.py
 """
@@ -43,6 +42,11 @@ with st.sidebar:
 with st.spinner("Loading and cleaning training data…"):
     train_df = load_and_clean(TRAIN_PATH)
 
+# ── Fix: session_state is empty on cache hit, force re-run ───
+if "block_encoder" not in st.session_state:
+    load_and_clean.clear()
+    train_df = load_and_clean(TRAIN_PATH)
+
 if len(train_df) == 0:
     st.error(
         "No Belltown records found after filtering. "
@@ -67,10 +71,10 @@ else:
 
 # ── Train models ─────────────────────────────────────────────
 with st.spinner("Training models… (cached after first run)"):
-    regressors, clf, feat_imp = train_models(train_df)
+    regressors, feat_imp = train_models(train_df)
 
 # ── Evaluate on test set (last 30 days or holdout) ───────────
-eval_result = evaluate(regressors, clf, test_df)
+eval_result = evaluate(regressors, test_df)
 reg_results = eval_result["reg_results"]
 cm          = eval_result["cm"]
 clf_acc     = eval_result["clf_acc"]
@@ -99,7 +103,7 @@ with tab1:
     pg_overview.render(train_df, test_df)
 
 with tab2:
-    pg_predict.render(regressors, clf, reg_results, train_df)
+    pg_predict.render(regressors, reg_results, train_df, holdout_results)
 
 with tab3:
     pg_explore.render(train_df)
