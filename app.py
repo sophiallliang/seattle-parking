@@ -2,7 +2,6 @@
 app.py
 Entry point — loads CSV directly, trains models, tab routing.
 
-
 Run:
     streamlit run app.py
 """
@@ -50,6 +49,11 @@ st.session_state["bf_dow_mean"] = lookup.get("bf_dow_mean")
 if "bf_loc" in lookup:
     st.session_state["bf_loc"] = lookup.get("bf_loc")
 
+# ── Fix: session_state is empty on cache hit, force re-run ───
+if "block_encoder" not in st.session_state:
+    load_and_clean.clear()
+    train_df = load_and_clean(TRAIN_PATH)
+
 if len(train_df) == 0:
     st.error(
         "No Belltown records found after filtering. "
@@ -74,10 +78,10 @@ else:
 
 # ── Train models ─────────────────────────────────────────────
 with st.spinner("Training models… (cached after first run)"):
-    regressors, clf, feat_imp = train_models(train_df)
+    regressors, feat_imp = train_models(train_df)
 
 # ── Evaluate on test set (last 30 days or holdout) ───────────
-eval_result = evaluate(regressors, clf, test_df)
+eval_result = evaluate(regressors, test_df)
 reg_results = eval_result["reg_results"]
 cm          = eval_result["cm"]
 clf_acc     = eval_result["clf_acc"]

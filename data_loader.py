@@ -250,7 +250,8 @@ def load_and_clean(filepath: str) -> pd.DataFrame:
         df_full = pd.concat(agg_months, ignore_index=True)
 
     # Business hours filter on full data
-    df_full = df_full[df_full["hour"].between(7, 22)].copy()
+    df_full = df_full[df_full["hour"].between(8, 19)].copy()
+
 
     # ── Step 3: Remove anomalous dates ──────────────────────
     # Dates where daily avg occ_rate < 0.01 are data collection failures
