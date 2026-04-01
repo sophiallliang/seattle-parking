@@ -108,13 +108,13 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 ])
 
 with tab1:
-    pg_map.render(regressors, clf, reg_results, train_df)
+    pg_map.render(regressors, None, reg_results, train_df)
 
 with tab2:
     pg_overview.render(train_df, test_df)
 
 with tab3:
-    pg_predict.render(regressors, clf, reg_results, train_df)
+    pg_predict.render(regressors, reg_results, train_df)
 
 with tab4:
     pg_explore.render(train_df)
