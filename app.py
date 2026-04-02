@@ -1,24 +1,22 @@
 """
 app.py
-Entry point — loads CSV directly, trains models, tab routing.
+Entry point — loads pre-saved artifacts instead of training from scratch.
 
 Run:
     streamlit run app.py
 """
 
 import os
+import joblib
 import numpy as np
 import streamlit as st
 import pandas as pd
-from sklearn.metrics import r2_score, mean_absolute_error
+import gdown
 
-from data_loader import load_and_clean, FEATURES
-from model import train_models, evaluate
-
-import _pages.overview   as pg_overview
-import _pages.predict    as pg_predict
-import _pages.explore    as pg_explore
-import _pages.model_eval as pg_model_eval
+import _pages.overview        as pg_overview
+import _pages.predict         as pg_predict
+import _pages.explore         as pg_explore
+import _pages.model_eval      as pg_model_eval
 import _pages.interactive_map as pg_map
 
 # ── Page config ──────────────────────────────────────────────
@@ -28,21 +26,6 @@ st.set_page_config(
     layout="wide",
 )
 
-# ── Data paths ───────────────────────────────────────────────
-TRAIN_PATH = "belltown_2023_full.csv"
-TEST_PATH  = "belltown_last30days.csv"
-
-# ── Auto-download data if not present ────────────────────────
-import gdown
-
-def download_if_missing(filename, gdrive_url):
-    if not os.path.exists(filename):
-        with st.spinner(f"Downloading {filename}... (first run only, may take a few minutes)"):
-            gdown.download(gdrive_url, filename, fuzzy=True, quiet=False)
-
-download_if_missing(TRAIN_PATH, "https://drive.google.com/file/d/1itU_WsXqSJdztbXUkRcK2ayZYE5up2-r/view?usp=drive_link")
-download_if_missing(TEST_PATH,  "https://drive.google.com/file/d/10042kF__l1xH04lwO2qIr2LBCyBIY-lw/view?usp=drive_link")
-
 # ── Sidebar ──────────────────────────────────────────────────
 with st.sidebar:
     st.title("🅿 Belltown Parking")
@@ -50,64 +33,41 @@ with st.sidebar:
     st.markdown("---")
     st.caption("Project: DS capstone · Belltown")
 
-# ── Load training data ───────────────────────────────────────
-with st.spinner("Loading and cleaning training data…"):
-    train_df, lookup = load_and_clean(TRAIN_PATH)
+# ── Download models.joblib from Google Drive if missing ──────
+MODELS_GDRIVE_URL = "https://drive.google.com/file/d/1ifvvbXqQ9TycQkCTeZ28DpxBKJ1TRM1q/view?usp=drive_link"  
 
-st.session_state["bf_mean"] = lookup.get("bf_mean")
-st.session_state["bf_hour_mean"] = lookup.get("bf_hour_mean")
-st.session_state["bf_dow_mean"] = lookup.get("bf_dow_mean")
-if "bf_loc" in lookup:
-    st.session_state["bf_loc"] = lookup.get("bf_loc")
+if not os.path.exists("models.joblib"):
+    with st.spinner("Downloading models... (first run only, ~1 min)"):
+        gdown.download(MODELS_GDRIVE_URL, "models.joblib", fuzzy=True, quiet=False)
 
-# ── Fix: session_state is empty on cache hit, force re-run ───
-if "block_encoder" not in st.session_state:
-    load_and_clean.clear()
-    train_df, lookup = load_and_clean(TRAIN_PATH)  
+# ── Load all artifacts ───────────────────────────────────────
+with st.spinner("Loading models and data..."):
+    regressors   = joblib.load("models.joblib")
+    feat_imp     = joblib.load("feat_imp.joblib")
+    block_encoder = joblib.load("block_encoder.joblib")
+    eval_cache   = joblib.load("eval_results.joblib")
 
-if len(train_df) == 0:
-    st.error(
-        "No Belltown records found after filtering. "
-        "Check that the CSV contains Belltown parking data."
-    )
-    st.stop()
+    bf_mean      = pd.read_csv("bf_mean.csv")
+    bf_hour_mean = pd.read_csv("bf_hour_mean.csv")
+    bf_dow_mean  = pd.read_csv("bf_dow_mean.csv")
+    bf_loc       = pd.read_csv("bf_loc.csv")
+    train_df     = pd.read_csv("train_sample.csv")
 
-# ── Holdout (always 20% of train) ────────────────────────────
-holdout_df = train_df.sample(frac=0.2, random_state=42)
+# ── Restore session_state ────────────────────────────────────
+st.session_state["bf_mean"]        = bf_mean
+st.session_state["bf_hour_mean"]   = bf_hour_mean
+st.session_state["bf_dow_mean"]    = bf_dow_mean
+st.session_state["bf_loc"]         = bf_loc
+st.session_state["block_encoder"]  = block_encoder
+st.session_state["block_names"]    = list(block_encoder.classes_)
 
-# ── Load test data ───────────────────────────────────────────
-is_holdout = True
-test_df    = holdout_df
-
-if os.path.exists(TEST_PATH):
-    with st.spinner("Loading last-30-days test data…"):
-        test_df, _ = load_and_clean(TEST_PATH)
-        is_holdout = False
-    st.sidebar.success(f"Test data: {len(test_df):,} records")
-else:
-    st.sidebar.info("Using 20% holdout as test set")
-
-# ── Train models ─────────────────────────────────────────────
-with st.spinner("Training models… (cached after first run)"):
-    regressors, feat_imp = train_models(train_df)
-
-# ── Evaluate on test set (last 30 days or holdout) ───────────
-eval_result = evaluate(regressors, test_df)
-reg_results = eval_result["reg_results"]
-cm          = eval_result["cm"]
-clf_acc     = eval_result["clf_acc"]
-scatter_df  = eval_result["scatter_df"]
-
-# ── Evaluate on holdout (always computed directly, no cache) ──
-X_hold = holdout_df[FEATURES]
-y_hold = holdout_df["occ_rate"]
-holdout_results = {}
-for name, m in regressors.items():
-    pred = m.predict(X_hold).clip(0, 1)
-    holdout_results[name] = {
-        "R²":  round(r2_score(y_hold, pred), 3),
-        "MAE": round(mean_absolute_error(y_hold, pred), 4),
-    }
+# ── Unpack eval results ──────────────────────────────────────
+reg_results     = eval_cache["reg_results"]
+cm              = eval_cache["cm"]
+clf_acc         = eval_cache["clf_acc"]
+scatter_df      = eval_cache["scatter_df"]
+holdout_results = eval_cache["holdout_results"]
+is_holdout      = True
 
 # ── Tab routing ──────────────────────────────────────────────
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -122,7 +82,7 @@ with tab1:
     pg_map.render(regressors, None, reg_results, train_df)
 
 with tab2:
-    pg_overview.render(train_df, test_df)
+    pg_overview.render(train_df, train_df)
 
 with tab3:
     pg_predict.render(regressors, reg_results, train_df)

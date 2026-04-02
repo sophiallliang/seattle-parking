@@ -10,4 +10,3 @@ requests>=2.31.0
 pydeck>=0.9.1
 folium>=0.15.0
 streamlit-folium>=0.20.0
-gdown>=4.7.0
