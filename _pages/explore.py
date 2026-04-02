@@ -93,7 +93,7 @@ def render(train_df: pd.DataFrame) -> None:
     lunch_pct     = len(train_df[(train_df["is_lunch"] == 1) & (train_df["occ_cat"] == "High")]) \
                     / max(len(high_df), 1) * 100
     fri_pm_avg    = train_df[train_df["is_fri_pm"]  == 1]["occ_rate"].mean()
-    late_avg      = train_df[train_df["hour"]       >= 20]["occ_rate"].mean()
+    late_avg      = train_df[train_df["hour"]       == 19]["occ_rate"].mean()
     weekend_avg   = train_df[train_df["is_weekend"] == 1]["occ_rate"].mean()
     weekday_avg   = train_df[train_df["is_weekend"] == 0]["occ_rate"].mean()
 
@@ -106,7 +106,7 @@ def render(train_df: pd.DataFrame) -> None:
         f"**Friday afternoon** avg occupancy: **{fri_pm_avg:.0%}**"
     )
     ic3.success(
-        f"**After 8pm** avg drops to **{late_avg:.0%}**"
+        f"**At 7pm** (last hour) avg is **{late_avg:.0%}**"
     )
 
     st.caption(

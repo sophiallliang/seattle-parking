@@ -52,7 +52,7 @@ if "bf_loc" in lookup:
 # ── Fix: session_state is empty on cache hit, force re-run ───
 if "block_encoder" not in st.session_state:
     load_and_clean.clear()
-    train_df = load_and_clean(TRAIN_PATH)
+    train_df, lookup = load_and_clean(TRAIN_PATH)  
 
 if len(train_df) == 0:
     st.error(
