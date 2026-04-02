@@ -32,6 +32,17 @@ st.set_page_config(
 TRAIN_PATH = "belltown_2023_full.csv"
 TEST_PATH  = "belltown_last30days.csv"
 
+# ── Auto-download data if not present ────────────────────────
+import gdown
+
+def download_if_missing(filename, gdrive_url):
+    if not os.path.exists(filename):
+        with st.spinner(f"Downloading {filename}... (first run only, may take a few minutes)"):
+            gdown.download(gdrive_url, filename, fuzzy=True, quiet=False)
+
+download_if_missing(TRAIN_PATH, "https://drive.google.com/file/d/1itU_WsXqSJdztbXUkRcK2ayZYE5up2-r/view?usp=drive_link")
+download_if_missing(TEST_PATH,  "https://drive.google.com/file/d/10042kF__l1xH04lwO2qIr2LBCyBIY-lw/view?usp=drive_link")
+
 # ── Sidebar ──────────────────────────────────────────────────
 with st.sidebar:
     st.title("🅿 Belltown Parking")
