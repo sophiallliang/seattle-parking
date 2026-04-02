@@ -65,14 +65,19 @@ for name, m in regressors.items():
         "MAE": round(mean_absolute_error(y_hold, pred), 4),
     }
 
+# ── Evaluate on last 30 days (external test) ─────────────────
+print("Evaluating on last 30 days test set...")
+test_df, _ = load_and_clean("belltown_last30days.csv")
+eval_external = evaluate(regressors, test_df)
+
 joblib.dump({
-    "reg_results":    eval_result["reg_results"],
-    "cm":             eval_result["cm"],
-    "clf_acc":        eval_result["clf_acc"],
-    "scatter_df":     eval_result["scatter_df"],
+    "reg_results":     eval_external["reg_results"],
+    "cm":              eval_external["cm"],
+    "clf_acc":         eval_external["clf_acc"],
+    "scatter_df":      eval_external["scatter_df"],
     "holdout_results": holdout_results,
 }, "eval_results.joblib")
-print("  Saved eval_results.joblib")
+print("  Saved eval_results.joblib (external + holdout)")
 
 # ── Step 7: Save train sample for EDA ────────────────────────
 print("Saving train_sample.csv...")

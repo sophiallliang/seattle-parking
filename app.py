@@ -34,7 +34,7 @@ with st.sidebar:
     st.caption("Project: DS capstone · Belltown")
 
 # ── Download models.joblib from Google Drive if missing ──────
-MODELS_GDRIVE_URL = "https://drive.google.com/file/d/1ifvvbXqQ9TycQkCTeZ28DpxBKJ1TRM1q/view?usp=drive_link"  
+MODELS_GDRIVE_URL = "https://drive.google.com/file/d/1ifvvbXqQ9TycQkCTeZ28DpxBKJ1TRM1q/view?usp=drive_link"
 
 if not os.path.exists("models.joblib"):
     with st.spinner("Downloading models... (first run only, ~1 min)"):
@@ -67,7 +67,7 @@ cm              = eval_cache["cm"]
 clf_acc         = eval_cache["clf_acc"]
 scatter_df      = eval_cache["scatter_df"]
 holdout_results = eval_cache["holdout_results"]
-is_holdout      = True
+is_holdout      = False
 
 # ── Tab routing ──────────────────────────────────────────────
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
