@@ -1,0 +1,148 @@
+body {
+    font-family: "Times New Roman", serif;
+    font-size: 12pt;
+    line-height: 1.6;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 40px 60px;
+    color: #111;
+}
+
+h1 {
+    font-size: 20pt;
+    text-align: center;
+    margin-bottom: 6px;
+}
+
+/* Author names line right after h1 */
+h1 + p {
+    text-align: center;
+    margin-top: 4px;
+    margin-bottom: 12px;
+}
+
+h2 {
+    font-size: 14pt;
+    margin-top: 32px;
+    margin-bottom: 8px;
+}
+
+h3 {
+    font-size: 12pt;
+    margin-top: 20px;
+    margin-bottom: 6px;
+}
+
+p {
+    margin: 10px 0;
+    text-align: justify;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 11pt;
+}
+
+th, td {
+    border: 1px solid #999;
+    padding: 6px 12px;
+    text-align: left;
+}
+
+th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+}
+
+tr:nth-child(even) {
+    background-color: #fafafa;
+}
+
+img {
+    display: block;
+    margin: 16px auto;
+    max-width: 100%;
+}
+
+em {
+    font-style: italic;
+}
+
+/* Figure captions only: p that contains only an em tag */
+p:has(> em:only-child) {
+    display: block;
+    text-align: center;
+    font-size: 10pt;
+    color: #444;
+    margin-top: -8px;
+    margin-bottom: 16px;
+}
+
+blockquote {
+    background: #f9f9f9;
+    border-left: 4px solid #ccc;
+    margin: 12px 0;
+    padding: 8px 16px;
+    font-family: "Courier New", monospace;
+    font-size: 10.5pt;
+}
+
+code {
+    background: #f4f4f4;
+    padding: 1px 4px;
+    font-family: "Courier New", monospace;
+    font-size: 10.5pt;
+    border-radius: 3px;
+}
+
+hr {
+    border: none;
+    border-top: 1px solid #ccc;
+    margin: 24px 0;
+}
+
+ol, ul {
+    margin: 8px 0;
+    padding-left: 24px;
+}
+
+li {
+    margin: 4px 0;
+}
+
+strong {
+    font-weight: bold;
+}
+
+/* Print settings */
+@media print {
+    body {
+        padding: 0;
+        max-width: 100%;
+    }
+    h2 {
+        page-break-before: auto;
+    }
+    img {
+        max-width: 90%;
+        page-break-inside: avoid;
+    }
+    table {
+        page-break-inside: avoid;
+    }
+}
+
+/* Page numbering via WeasyPrint */
+@page {
+    size: letter;
+    margin: 1in 1in 1.1in 1in;
+
+    @bottom-center {
+        content: counter(page);
+        font-family: "Times New Roman", serif;
+        font-size: 10pt;
+        color: #444;
+    }
+}

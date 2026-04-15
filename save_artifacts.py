@@ -67,6 +67,8 @@ for name, m in regressors.items():
 
 # ── Evaluate on last 30 days (external test) ─────────────────
 print("Evaluating on last 30 days test set...")
+load_and_clean.clear()  
+evaluate.clear()
 test_df, _ = load_and_clean("belltown_last30days.csv")
 eval_external = evaluate(regressors, test_df)
 
