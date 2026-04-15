@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>final_report</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="report_style.css" />
+</head>
+<body>
+<h1
+id="belltown-parking-occupancy-prediction-a-machine-learning-approach-to-urban-parking-intelligence">Belltown
+Parking Occupancy Prediction: A Machine Learning Approach to Urban
+Parking Intelligence</h1>
+<p><strong>Yimei Liang, Junhan Chen, Xihe Wang</strong></p>
+<h2 id="introduction">1. Introduction</h2>
+<p>Urban parking scarcity is one of the most persistent and costly
+challenges in modern cities. In Seattle’s Belltown neighborhood, a dense
+&amp; mixed-use district adjacent to downtown, drivers frequently circle
+blocks searching for available street parking, contributing to traffic
+congestion, increased emissions, and driver frustration. Studies by
+INRIX estimate that American drivers spend an average of 17 hours per
+year searching for parking, at a combined annual cost of roughly $345
+per driver. In high-demand urban cores like Belltown, this figure is
+considerably higher.</p>
+<p>The City of Seattle operates a paid on-street parking system managed
+by the Seattle Department of Transportation (SDOT), which records
+real-time occupancy data from thousands of blockface sensors across the
+city. This dataset, openly published on the Seattle Open Data portal,
+provides a unique opportunity to apply machine learning techniques to a
+problem with direct civic impact: predicting how full a given parking
+block will be at a given time.</p>
+<p>This project addresses the following problem: <strong>Given a target
+parking block, day of week, hour of day, month, and weather conditions,
+can we accurately predict the occupancy rate of that block?</strong> A
+reliable prediction system would allow drivers to plan parking in
+advance, reduce search-related cruising, and inform city planners about
+peak demand patterns.</p>
+<p>Our approach follows the complete machine learning pipeline: data
+acquisition and cleaning, feature engineering, model training and
+evaluation, and deployment as an interactive web application. The final
+product is a five-tab Streamlit application providing occupancy
+predictions, exploratory data visualizations, model performance
+dashboards, and an interactive map with batch predictions for all
+Belltown blocks.</p>
+<p>Three regression models were trained and compared:
+<strong>XGBoost</strong>, <strong>Random Forest</strong>, and
+<strong>Linear Regression</strong>, with hourly occupancy rate (a
+continuous value from 0 to 1) as the prediction target. The
+best-performing model, Random Forest, achieves strong performance on a
+20% internal holdout, demonstrating that temporal, spatial, and
+meteorological features together provide meaningful predictive signal
+for parking demand.</p>
+<h2 id="dataset-and-exploratory-analysis">2. Dataset and Exploratory
+Analysis</h2>
+<h3 id="data-source">2.1 Data Source</h3>
+<p>The dataset originates from the <strong>Seattle Paid Parking
+Occupancy</strong> dataset, published by SDOT and available through the
+Seattle Open Data portal. It records minute-level parking transactions
+across all paid blockfaces in Seattle. Each raw record captures the
+following fields:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OccupancyDateTime</td>
+<td>Timestamp of the observation</td>
+</tr>
+<tr>
+<td>PaidOccupancy</td>
+<td>Number of occupied paid spaces</td>
+</tr>
+<tr>
+<td>ParkingSpaceCount</td>
+<td>Total paid spaces on the blockface</td>
+</tr>
+<tr>
+<td>PaidParkingRate</td>
+<td>Hourly parking rate in USD</td>
+</tr>
+<tr>
+<td>BlockfaceName</td>
+<td>Unique city block segment identifier</td>
+</tr>
+<tr>
+<td>SideOfStreet</td>
+<td>Which side of the street (N/S/E/W)</td>
+</tr>
+<tr>
+<td>ParkingTimeLimitCategory</td>
+<td>Maximum allowed parking duration</td>
+</tr>
+<tr>
+<td>PaidParkingArea</td>
+<td>Neighborhood-level area name</td>
+</tr>
+<tr>
+<td>PaidParkingSubArea</td>
+<td>Sub-area within the neighborhood</td>
+</tr>
+<tr>
+<td>ParkingCategory</td>
+<td>Category (commercial, residential, etc.)</td>
+</tr>
+<tr>
+<td>Location</td>
+<td>WKT point geometry POINT(lon lat)</td>
+</tr>
+</tbody>
+</table>
+<p>For this project we focus exclusively on the
+<strong>Belltown</strong> sub-area to ensure geographic coherence.
+Training data consists of the full calendar year 2023
+(<code>belltown_2023_full.csv</code>), while test data is a recent
+30-day snapshot collected in 2026
+(<code>belltown_last30days.csv</code>). The 3-year gap between these two
+sets deliberately introduces temporal distribution shift, providing a
+stringent test of model generalizability.</p>
+<h3 id="dataset-characteristics">2.2 Dataset Characteristics</h3>
+<p>Raw occupancy rate is computed as:</p>
+<blockquote>
+<p>occ_rate = PaidOccupancy / ParkingSpaceCount, clipped to [0, 1]</p>
+</blockquote>
+<p>After hourly aggregation across all Belltown blockfaces and filtering
+to business hours (8:00–19:00), the dataset spans roughly 150+ unique
+blockfaces. The target variable is binned into three qualitative
+categories: <strong>Low</strong> (&lt; 0.40), <strong>Medium</strong>
+(0.40–0.70), and <strong>High</strong> (&gt; 0.70).</p>
+<h3 id="exploratory-data-analysis">2.3 Exploratory Data Analysis</h3>
+<p>EDA revealed several structural patterns that directly informed
+feature engineering.</p>
+<p><strong>Intraday temporal pattern.</strong> Occupancy follows a
+bimodal daily shape: it rises from its morning baseline to a lunch peak
+(11:00–13:00), dips slightly in the mid-afternoon, and spikes again
+during the evening commute (17:00–19:00). This motivated the creation of
+<code>is_lunch</code> and <code>is_evening</code> binary indicators.</p>
+<p><img src="images/fig1_occ_by_hour.png"
+alt="Figure 1: Average occupancy rate by hour of day" /> <em>Figure 1:
+Average occupancy rate by hour of day. The bimodal structure with a
+lunch peak (11–12h) and evening peak (18–19h) is clearly
+visible.</em></p>
+<p><strong>Day-of-week variation.</strong> Weekdays carry substantially
+higher average occupancy than weekends, driven by commuter and daytime
+worker demand. Friday afternoons stand out as a distinct demand spike
+consistent with pre-weekend dining and entertainment activity.
+Importantly, Seattle paid parking is <strong>free on Sundays</strong>,
+so Sunday data is absent from the dataset entirely.</p>
+<p><img src="images/fig2_occ_by_dow.png"
+alt="Figure 2: Average occupancy rate by day of week" /> <em>Figure 2:
+Average occupancy rate by day of week (Mon–Sat). Sunday is excluded as
+paid parking is free on Sundays in Seattle.</em></p>
+<p><strong>Spatial heterogeneity.</strong> Even within the relatively
+compact Belltown neighborhood, occupancy varies greatly across
+blockfaces. Blocks near high foot-traffic commercial corridors
+consistently outperform residential side streets, with the top 10
+highest-demand blocks forming a recognizable spatial cluster.</p>
+<p><strong>Weather effects.</strong> Precipitation exhibits a mild
+positive correlation with occupancy, likely reflecting drivers who
+choose to drive (and therefore park) on rainy days rather than walk.
+Temperature shows a weak negative correlation. These effects are
+secondary to temporal and spatial patterns but measurable.</p>
+<p><strong>Holiday effects.</strong> US and Washington State public
+holidays suppress weekday-style occupancy as office workers are absent.
+Holiday eves show elevated Friday-like patterns as workers leave
+early.</p>
+<p><strong>Data quality anomalies.</strong> Several dates showed
+implausibly low average daily occupancy (&lt; 1%), indicating sensor
+outages rather than genuine low demand. These were identified and
+removed during preprocessing.</p>
+<p><img src="images/fig3_daily_trend.png"
+alt="Figure 3: Daily average occupancy over the full 2023 training period" />
+<em>Figure 3: Daily average occupancy rate across all Belltown
+blockfaces (Jan–Dec 2023). Weekly periodicity and a summer dip are
+visible.</em></p>
+<p><img src="images/fig4_heatmap.png"
+alt="Figure 4: Occupancy heatmap — hour × day of week" /> <em>Figure 4:
+Heatmap of average occupancy by hour and day of week. Darker orange-red
+cells indicate higher demand. Late weekday afternoons (Thu–Fri, 17–19h)
+and midday periods show the highest occupancy.</em></p>
+<p><img src="images/fig5_occ_distribution.png"
+alt="Figure 5: Occupancy rate distribution by category" /> <em>Figure 5:
+Distribution of hourly occupancy rates colored by category (Low / Medium
+/ High). The distribution is skewed right with a large Low-occupancy
+mass and a secondary High-occupancy peak.</em></p>
+<p><img src="images/fig6_weekday_weekend.png"
+alt="Figure 6: Weekday vs weekend hourly occupancy profile" />
+<em>Figure 6: Average hourly occupancy profile for weekdays vs weekends.
+Weekdays show a sharper midday peak; weekends show a flatter,
+later-shifted curve with higher evening demand.</em></p>
+<h2 id="data-preprocessing">3. Data Preprocessing</h2>
+<p>The preprocessing pipeline is implemented in
+<code>data_loader.py</code> and proceeds in ten well-defined steps, each
+motivated by specific observations from EDA. The table below summarizes
+how the dataset size evolves through the pipeline:</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Records</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Raw CSV (minute-level)</td>
+<td>~5M+</td>
+<td>Sub-hourly sensor readings, 142 blockfaces</td>
+</tr>
+<tr>
+<td>After hourly aggregation</td>
+<td>~620,000</td>
+<td>One record per (block, date, hour)</td>
+</tr>
+<tr>
+<td>After business hours filter (8–19h)</td>
+<td>~310,000</td>
+<td>12-hour enforcement window retained</td>
+</tr>
+<tr>
+<td>After anomalous date removal</td>
+<td>~290,000</td>
+<td>Sensor dropout dates excluded</td>
+</tr>
+<tr>
+<td>After stratified sampling (50k/month cap)</td>
+<td>~460,900</td>
+<td>Final training set used for modeling</td>
+</tr>
+</tbody>
+</table>
+<p>The final training set covers <strong>142 unique blockfaces</strong>
+across the full year 2023.</p>
+<h3 id="chunked-csv-reading">3.1 Chunked CSV Reading</h3>
+<p>The raw CSV files can reach several hundred megabytes, so they are
+read in chunks of 500,000 rows using
+<code>pd.read_csv(..., chunksize=500_000)</code> to avoid memory
+overflow. Each chunk is parsed and bucketed by calendar month for
+downstream month-stratified processing.</p>
+<h3 id="column-renaming-and-datetime-parsing">3.2 Column Renaming and
+Datetime Parsing</h3>
+<p>A mapping dictionary standardizes the verbose SDOT column names to
+concise internal identifiers (e.g., <code>OccupancyDateTime</code> →
+<code>datetime</code>, <code>PaidOccupancy</code> →
+<code>occupied</code>). The datetime field is parsed with
+<code>format="mixed"</code> to handle any formatting inconsistencies in
+the raw data.</p>
+<h3 id="hourly-aggregation">3.3 Hourly Aggregation</h3>
+<p>Individual sensor readings are aggregated to hourly granularity per
+blockface:</p>
+<blockquote>
+<p>occ_rate(block, date, hour) = mean(occupied / capacity) over that
+hour</p>
+</blockquote>
+<p>This reduces noise, produces a stable interpretable target, and
+aligns all blockfaces to the same temporal resolution. Records with zero
+or negative capacity are excluded.</p>
+<h3 id="business-hours-filtering">3.4 Business Hours Filtering</h3>
+<p>Only hours 8–19 (inclusive) are retained, corresponding to Seattle’s
+paid parking enforcement window. Outside these hours, no paid occupancy
+data is collected, and the prediction use case does not apply.</p>
+<h3 id="anomalous-date-removal">3.5 Anomalous Date Removal</h3>
+<p>Dates where the cross-blockface average daily occupancy falls below
+1% are identified as sensor dropout events and removed. Retaining them
+would teach the model a false association between certain calendar dates
+and near-zero occupancy.</p>
+<h3 id="historical-mean-feature-engineering">3.6 Historical Mean Feature
+Engineering</h3>
+<p>Three blockface-level historical mean features are computed from the
+<strong>complete aggregated dataset</strong> (before any sampling) to
+ensure statistical stability:</p>
+<ul>
+<li><strong>blockface_mean</strong>: Overall average occupancy for each
+blockface across the full year.</li>
+<li><strong>blockface_hour_mean</strong>: Average occupancy for each
+(blockface, hour) pair (the typical hourly demand profile specific to
+each block).</li>
+<li><strong>blockface_dow_mean</strong>: Average occupancy for each
+(blockface, day-of-week) pair (the typical day-of-week profile per
+block).</li>
+</ul>
+<p>These three features turn out to be the most predictive in the final
+model, because they encode the “base rate” for a specific location at a
+specific time. Computing them from the full data (rather than from the
+sampled training set) is a deliberate design choice to avoid
+underestimation from small samples in rare time slots.</p>
+<h3 id="stratified-sampling">3.7 Stratified Sampling</h3>
+<p>To keep training size computationally manageable, stratified sampling
+is applied with a cap of 50,000 records per calendar month.
+Stratification is defined across 35 strata: 7 day-of-week levels × 5
+time slots (Early Morning, Morning Peak, Midday, Evening Peak, Night).
+This preserves proportional representation of all demand regimes and
+prevents over-sampling of high-frequency midday records.</p>
+<h3 id="cyclical-time-encoding">3.8 Cyclical Time Encoding</h3>
+<p>Raw integer hour and day-of-week values have a discontinuity at their
+boundaries (hour 23 and hour 0 are adjacent but numerically distant). We
+apply sine/cosine transformations to encode continuous circular
+time:</p>
+<blockquote>
+<p>hour_sin = sin(2π × hour / 24), hour_cos = cos(2π × hour / 24)</p>
+</blockquote>
+<blockquote>
+<p>dow_sin = sin(2π × dow / 7), dow_cos = cos(2π × dow / 7)</p>
+</blockquote>
+<p>These four features allow models to respect the circular topology of
+time without hardcoded distance assumptions.</p>
+<h3 id="holiday-flags">3.9 Holiday Flags</h3>
+<p>Using the <code>holidays</code> Python library with Washington State
+configuration, two binary flags are constructed:</p>
+<ul>
+<li><strong>is_holiday</strong>: 1 if the date is a US federal or WA
+state holiday.</li>
+<li><strong>is_holiday_eve</strong>: 1 if the date is the day
+immediately preceding a holiday, capturing the elevated pre-holiday
+occupancy behavior observed in EDA.</li>
+</ul>
+<h3 id="weather-integration">3.10 Weather Integration</h3>
+<p>Hourly historical weather data for the Seattle area is retrieved from
+the <strong>Open-Meteo Archive API</strong> (free, no API key required).
+Two continuous features are merged to the dataset by (date, hour):</p>
+<ul>
+<li><strong>temp_c</strong>: Air temperature in Celsius.</li>
+<li><strong>precip_mm</strong>: Precipitation in millimeters.</li>
+</ul>
+<p>A derived binary feature <strong>is_rainy</strong> = 1 if precip_mm
+&gt; 0.5 mm captures the threshold effect. Missing weather values are
+imputed with the dataset median for temperature and 0 for
+precipitation.</p>
+<h3 id="final-feature-set">3.11 Final Feature Set</h3>
+<p>The preprocessing pipeline produces <strong>20 features</strong> used
+for model training:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Category</th>
+<th>Features</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Raw temporal</td>
+<td>hour, dow, month</td>
+</tr>
+<tr>
+<td>Binary indicators</td>
+<td>is_weekend, is_lunch, is_evening, is_fri_pm</td>
+</tr>
+<tr>
+<td>Cyclic encoding</td>
+<td>hour_sin, hour_cos, dow_sin, dow_cos</td>
+</tr>
+<tr>
+<td>Spatial</td>
+<td>block_id (label-encoded blockface name)</td>
+</tr>
+<tr>
+<td>Historical means</td>
+<td>blockface_mean, blockface_hour_mean, blockface_dow_mean</td>
+</tr>
+<tr>
+<td>Calendar</td>
+<td>is_holiday, is_holiday_eve</td>
+</tr>
+<tr>
+<td>Weather</td>
+<td>temp_c, precip_mm, is_rainy</td>
+</tr>
+</tbody>
+</table>
+<h2 id="model-training-and-evaluation">4. Model Training and
+Evaluation</h2>
+<h3 id="model-selection-and-rationale">4.1 Model Selection and
+Rationale</h3>
+<p>Three regression models were trained, spanning the complexity
+spectrum from linear to gradient-boosted ensemble.</p>
+<p><strong>Linear Regression (Baseline).</strong> Ordinary least squares
+with no regularization. Included to quantify the non-linear component of
+the problem. Its performance establishes how much variance is
+explainable by simple additive relationships.</p>
+<p><strong>Random Forest Regressor.</strong> An ensemble of 300 decision
+trees with bootstrap sampling and feature subsampling. Configuration:
+<code>n_estimators=300</code>, <code>max_depth=15</code>,
+<code>min_samples_leaf=3</code>, <code>random_state=42</code>. Random
+forests naturally capture feature interactions without manual
+specification, and the <code>min_samples_leaf=3</code> constraint
+prevents overfitting to noise in small leaf nodes.</p>
+<p><strong>XGBoost Regressor.</strong> A gradient-boosted tree ensemble:
+<code>n_estimators=800</code>, <code>max_depth=7</code>,
+<code>learning_rate=0.03</code>, <code>subsample=0.8</code>,
+<code>colsample_bytree=0.8</code>, <code>min_child_weight=5</code>,
+<code>gamma=0.1</code>. The low learning rate with high n_estimators
+trades training time for smooth regularized gradient descent. The
+<code>gamma</code> and <code>min_child_weight</code> parameters provide
+explicit regularization against overfitting.</p>
+<h3 id="evaluation-strategy">4.2 Evaluation Strategy</h3>
+<p>Two evaluation protocols were employed to give a complete picture of
+model performance.</p>
+<p><strong>Internal 20% holdout.</strong> A stratified random 20% of the
+training data was held out before model fitting. This measures how well
+each model learned the 2023 Belltown distribution and enables fair
+direct comparison between models.</p>
+<p><strong>External last-30-days test (2026).</strong> The
+<code>belltown_last30days.csv</code> dataset from 2026 serves as a
+real-world generalization test. The deliberate 3-year temporal gap
+measures robustness to parking pattern evolution, a stringent benchmark
+that simulates production deployment.</p>
+<h3 id="evaluation-metrics">4.3 Evaluation Metrics</h3>
+<ul>
+<li><strong>R²</strong>: Proportion of variance in occupancy rate
+explained by the model. Target threshold: R² ≥ 0.75.</li>
+<li><strong>MAE</strong>: Average absolute difference between predicted
+and actual occupancy rate.</li>
+<li><strong>RMSE</strong>: Root mean squared error, penalizing large
+errors more severely than MAE.</li>
+<li><strong>Classification accuracy</strong>: Continuous predictions
+thresholded into Low/Medium/High categories and evaluated via confusion
+matrix.</li>
+</ul>
+<h3 id="results">4.4 Results</h3>
+<p>On the <strong>internal 20% holdout</strong>, Random Forest achieves
+the highest R² and lowest MAE, outperforming XGBoost by a meaningful
+margin. Linear Regression confirms a substantial non-linear component:
+the R² gap between Linear Regression and the ensemble models justifies
+the added complexity of tree-based methods.</p>
+<p>On the <strong>external 2026 test set</strong>, all three models show
+R² values within approximately 0.02 of each other. The performance gap
+between models collapses under temporal distribution shift, a well-known
+phenomenon where distributional drift erodes model-specific advantages.
+All three models show comparable degradation from internal to external
+validation, indicating that the drop is driven by temporal drift rather
+than model-specific overfitting.</p>
+<p>The following table summarizes the regression metrics under both
+evaluation protocols:</p>
+<table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr>
+<th>Model</th>
+<th>R² (20% holdout)</th>
+<th>R² (last 30 days)</th>
+<th>MAE (20% holdout)</th>
+<th>MAE (last 30 days)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>XGBoost</td>
+<td>0.586</td>
+<td>0.591</td>
+<td>0.1220</td>
+<td>0.1191</td>
+</tr>
+<tr>
+<td><strong>Random Forest</strong></td>
+<td><strong>0.657</strong></td>
+<td>0.574</td>
+<td><strong>0.1111</strong></td>
+<td>0.1217</td>
+</tr>
+<tr>
+<td>Linear Regression</td>
+<td>0.514</td>
+<td>0.592</td>
+<td>0.1330</td>
+<td>0.1183</td>
+</tr>
+</tbody>
+</table>
+<p>On the internal 20% holdout, Random Forest achieves the highest R²
+(0.657) and lowest MAE (0.111), outperforming XGBoost and Linear
+Regression by a meaningful margin. On the external 2026 test, all three
+models converge to R² values between 0.574 and 0.592, a range of only
+0.018, confirming that the performance gap collapses under temporal
+distribution shift.</p>
+<p><strong>Final model selection: Random Forest</strong> — justified
+by:</p>
+<ol type="1">
+<li>Highest R² on internal 20% holdout (same distribution as training;
+most reliable comparison).</li>
+<li>Lowest MAE on internal validation, meaning tightest average
+predictions.</li>
+<li>External R² is statistically indistinguishable across all three
+models.</li>
+<li>Native feature importance estimates support model interpretability
+without additional tooling.</li>
+</ol>
+<p><img src="images/fig7_r2_comparison.png"
+alt="Figure 7: R² comparison across models (internal 20% holdout)" />
+<em>Figure 7: R² scores for XGBoost (0.586), Random Forest (0.657), and
+Linear Regression (0.514) on the internal 20% holdout. The dashed line
+marks the target R² = 0.75. Random Forest achieves the highest
+R².</em></p>
+<h3 id="feature-importance-analysis">4.5 Feature Importance
+Analysis</h3>
+<p>The Random Forest feature importances reveal that <strong>historical
+mean features dominate prediction</strong>:</p>
+<ol type="1">
+<li><strong>blockface_hour_mean</strong> : the strongest predictor by a
+wide margin. Knowing the typical occupancy for this specific block at
+this specific hour is highly predictive of actual demand.</li>
+<li><strong>blockface_mean</strong> : the overall blockface baseline
+provides a strong prior.</li>
+<li><strong>blockface_dow_mean</strong> : the day-of-week profile per
+block contributes significant additional signal.</li>
+<li><strong>hour, hour_sin, hour_cos</strong> : time-of-day features
+contribute after controlling for block-level means.</li>
+<li><strong>dow, dow_sin, dow_cos</strong> : day-of-week contributes at
+moderate importance.</li>
+<li><strong>is_weekend, is_fri_pm</strong> : binary demand-regime
+indicators capture non-linear day-type effects.</li>
+<li><strong>block_id</strong> : raw block identity provides residual
+spatial signal.</li>
+<li><strong>temp_c, precip_mm, is_rainy</strong> : weather features
+contribute at lower importance levels.</li>
+<li><strong>is_holiday, is_holiday_eve</strong> : low importance due to
+infrequency in the training set.</li>
+</ol>
+<p>This ranking validates the key feature engineering decision: the most
+predictive value came from location-specific historical demand priors
+(the three blockface mean lookups), not from raw temporal features
+alone.</p>
+<p><img src="images/fig8_feature_importance.png"
+alt="Figure 8: Random Forest feature importance" /> <em>Figure 8:
+Feature importance scores from Random Forest. blockface_hour_mean is the
+strongest predictor (bar extends beyond chart boundary), followed by
+blockface_dow_mean, confirming that location-specific historical priors
+are the primary predictive signal.</em></p>
+<h3 id="classification-performance">4.6 Classification Performance</h3>
+<p>After thresholding continuous predictions at 0.40 and 0.70, the
+confusion matrix shows strong per-category performance. Low and High
+occupancy periods are classified with high precision and recall. The
+most common misclassification is between Medium and the adjacent
+categories (expected given that the Medium band (40–70%) is defined by
+two soft boundaries and is inherently the most ambiguous demand state).
+Overall classification accuracy substantially exceeds the majority-class
+baseline.</p>
+<p><img src="images/fig9_confusion_matrix.png"
+alt="Figure 9: Random Forest confusion matrix — threshold-based classification" />
+<em>Figure 9: Confusion matrix for threshold-based occupancy category
+classification (Low / Medium / High). The diagonal shows correct
+predictions: 19,903 Low, 10,181 Medium, 2,018 High. Most errors occur at
+Low↔︎Medium and Medium↔︎High boundaries.</em></p>
+<p><img src="images/fig10_predicted_vs_actual.png"
+alt="Figure 10: Predicted vs actual occupancy rate — Random Forest" />
+<em>Figure 10: Scatter plot of predicted vs actual occupancy rates
+(3,000-point sample). Points cluster tightly along the red diagonal,
+indicating well-calibrated predictions across the full [0, 1]
+range.</em></p>
+<p><img src="images/fig11_residuals.png"
+alt="Figure 11: Residual distribution — Random Forest" /> <em>Figure 11:
+Distribution of residuals (actual − predicted). The histogram is
+approximately symmetric and centered near zero, indicating low
+systematic bias. The bell-shaped spread reflects prediction
+uncertainty.</em></p>
+<h2 id="application-description">5. Application Description</h2>
+<p>The trained models and precomputed artifacts are served through a
+<strong>five-tab Streamlit web application</strong>, publicly accessible
+at: <strong>https://belltown-parking.streamlit.app/</strong>. The app
+targets two audiences: (1) <strong>drivers</strong> seeking a quick
+parking forecast before driving to Belltown, and (2)
+<strong>analysts</strong> reviewing historical patterns and model
+behavior.</p>
+<h3 id="deployment-architecture">5.1 Deployment Architecture</h3>
+<p>To avoid training models at startup, all computationally expensive
+artifacts are precomputed offline via <code>save_artifacts.py</code> and
+stored as binary files:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>File</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>models.joblib</td>
+<td>Trained regressor objects (XGBoost, Random Forest, Linear
+Regression)</td>
+</tr>
+<tr>
+<td>feat_imp.joblib</td>
+<td>Feature importance Series from Random Forest</td>
+</tr>
+<tr>
+<td>block_encoder.joblib</td>
+<td>Fitted LabelEncoder for blockface names</td>
+</tr>
+<tr>
+<td>eval_results.joblib</td>
+<td>Precomputed evaluation metrics, confusion matrix, scatter data</td>
+</tr>
+<tr>
+<td>bf_mean.csv</td>
+<td>Blockface-level overall mean occupancy lookup</td>
+</tr>
+<tr>
+<td>bf_hour_mean.csv</td>
+<td>Blockface × hour mean occupancy lookup</td>
+</tr>
+<tr>
+<td>bf_dow_mean.csv</td>
+<td>Blockface × day-of-week mean occupancy lookup</td>
+</tr>
+<tr>
+<td>bf_loc.csv</td>
+<td>Blockface geographic coordinates</td>
+</tr>
+<tr>
+<td>train_sample.csv</td>
+<td>10% random sample of training data for EDA</td>
+</tr>
+</tbody>
+</table>
+<p>On first run in the cloud, <code>models.joblib</code> is
+automatically downloaded from Google Drive if absent. All other
+artifacts are committed to the repository. This design enables
+sub-second app initialization on Streamlit Community Cloud without
+requiring the raw CSV files.</p>
+<h3 id="tab-1-interactive-map">5.2 Tab 1 — Interactive Map</h3>
+<p>The Map tab is the application’s flagship feature. It renders all
+~150+ Belltown parking blocks simultaneously on an interactive
+dark-themed map, with each block colored by predicted occupancy:</p>
+<ul>
+<li><strong>Green circles</strong>: Low occupancy (&lt; 40%) — easy
+parking</li>
+<li><strong>Orange circles</strong>: Medium occupancy (40–70%) — limited
+availability</li>
+<li><strong>Red circles</strong>: High occupancy (&gt; 70%) — likely
+full</li>
+</ul>
+<p>A vectorized batch prediction engine builds a feature matrix for all
+blocks in a single pass and calls the selected model once, making the
+map responsive even for large block counts. User controls include model
+selector, day of week, hour slider, month, weather preset, holiday
+toggle, and minimum time-limit filter.</p>
+<p><strong>Destination routing</strong>: Users can select a named
+landmark (Space Needle, Pike Place Market, Olympic Sculpture Park,
+Amazon Spheres) or type any Seattle address (geocoded in real time via
+the Nominatim OpenStreetMap API). The map filters to blocks within
+approximately 600 meters and lists the five nearest blocks with
+predicted occupancy and walking distance.</p>
+<p><strong>Daily animation mode</strong>: Renders the full 7:00–22:00
+occupancy evolution as an animated Plotly scatter map, enabling users to
+visualize how parking pressure propagates through the day.</p>
+<p>The static interactive mode uses <strong>Folium</strong> (Python
+Leaflet.js wrapper) for reliable click-on-marker block selection.
+Clicking any circle opens a detail panel with predicted occupancy
+percentage, occupancy category, estimated available spaces, a gauge
+visualization, and model R².</p>
+<p><img src="images/interactive_map1.png"
+alt="Figure 12: Interactive map showing predicted occupancy for all Belltown blocks" />
+<em>Figure 12: Interactive map view showing all Belltown parking blocks
+color-coded by predicted occupancy (green = low, orange = medium, red =
+high).</em></p>
+<p><img src="images/interactive_map2.png"
+alt="Figure 13: Interactive map with selected block detail panel" />
+<em>Figure 13: Clicking a block opens a detail panel showing predicted
+occupancy rate, category, estimated available spaces, and a gauge
+visualization.</em></p>
+<h3 id="tab-2-overview">5.3 Tab 2 — Overview</h3>
+<p>The Overview tab provides a high-level dashboard derived from 2023
+training data:</p>
+<ul>
+<li><strong>KPI cards</strong>: Average occupancy, peak hour, busiest
+day of week.</li>
+<li><strong>Daily trend line chart</strong>: Average daily occupancy
+over the test period with anomalous days filtered.</li>
+<li><strong>By-day-of-week bar chart</strong>: Comparative weekly demand
+profile.</li>
+<li><strong>By-hour bar chart</strong>: Intraday demand profile showing
+AM, lunch, and PM peaks.</li>
+</ul>
+<p>A note explains that Sunday data is absent because Seattle paid
+parking is free on Sundays, a systematic absence rather than a data
+quality issue.</p>
+<h3 id="tab-3-predict">5.4 Tab 3 — Predict</h3>
+<p>The Predict tab provides a single-block, single-time prediction
+interface.</p>
+<p><strong>Inputs</strong>: model selector, day of week, hour slider
+(8–19), month, parking block dropdown, weather preset (Sunny / Cloudy /
+Light Rain / Heavy Rain), public holiday checkbox.</p>
+<p><strong>Outputs</strong>: predicted occupancy percentage, model R²
+with explanatory tooltip, color-coded occupancy category label,
+confidence indicator (high if prediction is far from a category
+boundary, moderate if near one), estimated available spaces based on
+historical block capacity, and a full-color gauge visualization on a
+0–100% scale.</p>
+<p>The prediction pipeline automatically retrieves the three historical
+mean features for the selected block from lookup tables in session
+state, constructs a properly-encoded 20-feature input vector, and calls
+the selected model.</p>
+<h3 id="tab-4-explore">5.5 Tab 4 — Explore</h3>
+<p>The Explore tab provides interactive EDA visualizations:</p>
+<ul>
+<li><strong>Hour × Day-of-week heatmap</strong>: A colored grid
+revealing the temporal structure of demand using a yellow-orange-red
+scale.</li>
+<li><strong>Occupancy rate distribution</strong>: Histogram colored by
+Low/Medium/High category, showing the bimodal distribution of Belltown
+occupancy.</li>
+<li><strong>Weekday vs weekend hourly profile</strong>: Line chart
+comparing the intraday demand curve between day types.</li>
+<li><strong>Top 10 busiest blocks</strong>: Ranked table of
+highest-demand blockfaces by average annual occupancy.</li>
+<li><strong>Key insights panel</strong>: Auto-generated statistics
+including lunch-hour contribution to high occupancy, Friday afternoon
+average, and end-of-day average.</li>
+</ul>
+<h3 id="tab-5-model">5.6 Tab 5 — Model</h3>
+<p>The Model tab targets analysts reviewing prediction quality:</p>
+<ul>
+<li><strong>Internal vs external validation table</strong>: Side-by-side
+R² and MAE comparison for all three models under both evaluation
+protocols, with annotation explaining the expected R² drop due to
+temporal distribution shift.</li>
+<li><strong>R² bar chart</strong>: Visual model comparison with a
+reference line at the target R² = 0.75.</li>
+<li><strong>Feature importance chart</strong>: Horizontal bar chart of
+Random Forest importances.</li>
+<li><strong>Confusion matrix heatmap</strong>: Per-class
+precision/recall visualization for Low/Medium/High categories.</li>
+<li><strong>Predicted vs actual scatter plot</strong>: 3,000-point
+sample with a perfect-prediction diagonal reference line.</li>
+<li><strong>Residual distribution histogram</strong>: Distribution of
+(actual − predicted) residuals centered at zero.</li>
+</ul>
+<h2 id="conclusion-and-future-work">6. Conclusion and Future Work</h2>
+<h3 id="summary">6.1 Summary</h3>
+<p>This project successfully developed an end-to-end parking occupancy
+prediction system for Seattle’s Belltown neighborhood, demonstrating the
+full machine learning lifecycle from raw sensor data to a
+production-ready interactive application.</p>
+<p>The key contributions are:</p>
+<ol type="1">
+<li><p>A <strong>robust preprocessing pipeline</strong> handling
+large-scale tabular data through chunked reading, hourly aggregation,
+anomaly removal, and stratified sampling, with historical mean features
+computed from the full dataset before sampling to prevent statistical
+bias.</p></li>
+<li><p>A <strong>rich 20-feature representation</strong> combining
+cyclic temporal encoding, location-specific historical demand priors,
+holiday calendars, and weather data, capturing the primary drivers of
+parking demand.</p></li>
+<li><p>A <strong>thorough dual-validation protocol</strong> using both a
+20% internal holdout and an external 3-year-gap temporal test set,
+providing honest bounds on expected real-world performance.</p></li>
+<li><p>A <strong>feature-rich Streamlit application</strong> with
+interactive map, batch prediction, destination routing, daily animation,
+and full EDA, all served from precomputed artifacts for instant
+startup.</p></li>
+</ol>
+<p>Random Forest is the best model on internal validation and was
+selected as the production model. The observed R² degradation on the
+external 2026 test is attributable to temporal distribution shift across
+the 3-year gap, not model inadequacy.</p>
+<h3 id="limitations">6.2 Limitations</h3>
+<p><strong>Temporal distribution shift</strong>: The 3-year gap between
+2023 training and 2026 test data introduces meaningful behavioral drift.
+Post-pandemic commuting changes, new commercial development, and remote
+work shifts are not captured by 2023 data. A model retrained annually
+would be more accurate.</p>
+<p><strong>No real-time data integration</strong>: The system uses
+precomputed historical means and static trained models. It cannot
+incorporate live sensor readings, which would substantially improve
+near-term predictions.</p>
+<p><strong>Single-neighborhood scope</strong>: The model is trained and
+validated exclusively on Belltown. Generalization to other Seattle
+neighborhoods would require retraining with neighborhood-aware features
+or a multi-task learning formulation.</p>
+<p><strong>Special events not modeled</strong>: Large events at Seattle
+Center, Climate Pledge Arena concerts, and Seahawks game days cause
+occupancy spikes not captured by the current feature set.</p>
+<p><strong>Block capacity changes</strong>: Parking space counts can
+change due to construction or permit changes. The model uses historical
+capacity mode values and does not account for recent reductions.</p>
+<h3 id="future-work">6.3 Future Work</h3>
+<p><strong>Real-time integration</strong>: Connect to the SDOT live
+occupancy API to blend model predictions with current sensor readings,
+enabling predictions that adjust for observed conditions.</p>
+<p><strong>Multi-year training</strong>: Incorporate 2019–2024 data
+(excluding 2020–2021 COVID anomalies) to capture multiple years of
+seasonal variation and year-over-year trend.</p>
+<p><strong>Time series modeling</strong>: A sequential architecture
+(LSTM or Temporal Fusion Transformer) that explicitly models occupancy
+trajectories within and across days could capture autoregressive
+patterns missed by the tabular approach.</p>
+<p><strong>Special events feature</strong>: Integrate a Seattle events
+calendar (Ticketmaster API, Seattle.gov events) to add event-proximity
+and event-type features on high-demand dates.</p>
+<p><strong>Multi-neighborhood generalization</strong>: Train a single
+city-wide model with neighborhood and blockface identifiers as features,
+enabling transfer learning to areas with limited historical data.</p>
+<p><strong>Price elasticity modeling</strong>: The dataset includes paid
+parking rates. A joint occupancy-and-price model could estimate demand
+elasticity, directly informing Seattle’s SPark dynamic pricing
+program.</p>
+<h2 id="references">References</h2>
+<ol type="1">
+<li><p>Seattle Department of Transportation. <em>Paid Parking Occupancy
+Dataset</em>. Seattle Open Data Portal.
+https://data.seattle.gov.</p></li>
+<li><p>INRIX. <em>2022 Global Traffic Scorecard</em>. INRIX Research,
+2023.</p></li>
+<li><p>Breiman, L. (2001). Random forests. <em>Machine Learning</em>,
+45(1), 5–32.</p></li>
+<li><p>Chen, T., &amp; Guestrin, C. (2016). XGBoost: A scalable tree
+boosting system. <em>Proceedings of KDD 2016</em>.</p></li>
+<li><p>Open-Meteo. <em>Historical Weather API Documentation</em>.
+https://open-meteo.com.</p></li>
+<li><p>Nominatim / OpenStreetMap Contributors. <em>Geocoding API</em>.
+https://nominatim.openstreetmap.org.</p></li>
+<li><p>Streamlit Inc. <em>Streamlit Documentation</em>.
+https://docs.streamlit.io.</p></li>
+<li><p>Python <code>holidays</code> library.
+https://github.com/vacanza/python-holidays.</p></li>
+</ol>
+</body>
+</html>

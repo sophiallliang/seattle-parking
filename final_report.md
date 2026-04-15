@@ -6,7 +6,7 @@
 
 ## 1. Introduction
 
-Urban parking scarcity is one of the most persistent and costly challenges in modern cities. In Seattle's Belltown neighborhood — a dense, mixed-use district adjacent to downtown — drivers frequently circle blocks searching for available street parking, contributing to traffic congestion, increased emissions, and driver frustration. Studies by INRIX estimate that American drivers spend an average of 17 hours per year searching for parking, at a combined annual cost of roughly $345 per driver. In high-demand urban cores like Belltown, this figure is considerably higher.
+Urban parking scarcity is one of the most persistent and costly challenges in modern cities. In Seattle's Belltown neighborhood, a dense & mixed-use district adjacent to downtown, drivers frequently circle blocks searching for available street parking, contributing to traffic congestion, increased emissions, and driver frustration. Studies by INRIX estimate that American drivers spend an average of 17 hours per year searching for parking, at a combined annual cost of roughly $345 per driver. In high-demand urban cores like Belltown, this figure is considerably higher.
 
 The City of Seattle operates a paid on-street parking system managed by the Seattle Department of Transportation (SDOT), which records real-time occupancy data from thousands of blockface sensors across the city. This dataset, openly published on the Seattle Open Data portal, provides a unique opportunity to apply machine learning techniques to a problem with direct civic impact: predicting how full a given parking block will be at a given time.
 
@@ -56,14 +56,14 @@ EDA revealed several structural patterns that directly informed feature engineer
 ![Figure 1: Average occupancy rate by hour of day](images/fig1_occ_by_hour.png)
 *Figure 1: Average occupancy rate by hour of day. The bimodal structure with a lunch peak (11–12h) and evening peak (18–19h) is clearly visible.*
 
-**Day-of-week variation.** Weekdays carry substantially higher average occupancy than weekends, driven by commuter and daytime worker demand. Friday afternoons stand out as a distinct demand spike consistent with pre-weekend dining and entertainment activity. Importantly, Seattle paid parking is **free on Sundays**, so Sunday data is absent from the dataset entirely — a systematic gap that must be treated explicitly in model encoding.
+**Day-of-week variation.** Weekdays carry substantially higher average occupancy than weekends, driven by commuter and daytime worker demand. Friday afternoons stand out as a distinct demand spike consistent with pre-weekend dining and entertainment activity. Importantly, Seattle paid parking is **free on Sundays**, so Sunday data is absent from the dataset entirely.
 
 ![Figure 2: Average occupancy rate by day of week](images/fig2_occ_by_dow.png)
 *Figure 2: Average occupancy rate by day of week (Mon–Sat). Sunday is excluded as paid parking is free on Sundays in Seattle.*
 
 **Spatial heterogeneity.** Even within the relatively compact Belltown neighborhood, occupancy varies greatly across blockfaces. Blocks near high foot-traffic commercial corridors consistently outperform residential side streets, with the top 10 highest-demand blocks forming a recognizable spatial cluster.
 
-**Weather effects.** Precipitation exhibits a mild positive correlation with occupancy — likely reflecting drivers who choose to drive (and therefore park) on rainy days rather than walk. Temperature shows a weak negative correlation. These effects are secondary to temporal and spatial patterns but measurable.
+**Weather effects.** Precipitation exhibits a mild positive correlation with occupancy, likely reflecting drivers who choose to drive (and therefore park) on rainy days rather than walk. Temperature shows a weak negative correlation. These effects are secondary to temporal and spatial patterns but measurable.
 
 **Holiday effects.** US and Washington State public holidays suppress weekday-style occupancy as office workers are absent. Holiday eves show elevated Friday-like patterns as workers leave early.
 
@@ -126,8 +126,8 @@ Dates where the cross-blockface average daily occupancy falls below 1% are ident
 Three blockface-level historical mean features are computed from the **complete aggregated dataset** (before any sampling) to ensure statistical stability:
 
 - **blockface_mean**: Overall average occupancy for each blockface across the full year.
-- **blockface_hour_mean**: Average occupancy for each (blockface, hour) pair — the typical hourly demand profile specific to each block.
-- **blockface_dow_mean**: Average occupancy for each (blockface, day-of-week) pair — the typical day-of-week profile per block.
+- **blockface_hour_mean**: Average occupancy for each (blockface, hour) pair (the typical hourly demand profile specific to each block).
+- **blockface_dow_mean**: Average occupancy for each (blockface, day-of-week) pair (the typical day-of-week profile per block).
 
 These three features turn out to be the most predictive in the final model, because they encode the "base rate" for a specific location at a specific time. Computing them from the full data (rather than from the sampled training set) is a deliberate design choice to avoid underestimation from small samples in rare time slots.
 
@@ -195,7 +195,7 @@ Two evaluation protocols were employed to give a complete picture of model perfo
 
 **Internal 20% holdout.** A stratified random 20% of the training data was held out before model fitting. This measures how well each model learned the 2023 Belltown distribution and enables fair direct comparison between models.
 
-**External last-30-days test (2026).** The `belltown_last30days.csv` dataset from 2026 serves as a real-world generalization test. The deliberate 3-year temporal gap measures robustness to parking pattern evolution — a stringent benchmark that simulates production deployment.
+**External last-30-days test (2026).** The `belltown_last30days.csv` dataset from 2026 serves as a real-world generalization test. The deliberate 3-year temporal gap measures robustness to parking pattern evolution, a stringent benchmark that simulates production deployment.
 
 ### 4.3 Evaluation Metrics
 
@@ -208,7 +208,7 @@ Two evaluation protocols were employed to give a complete picture of model perfo
 
 On the **internal 20% holdout**, Random Forest achieves the highest R² and lowest MAE, outperforming XGBoost by a meaningful margin. Linear Regression confirms a substantial non-linear component: the R² gap between Linear Regression and the ensemble models justifies the added complexity of tree-based methods.
 
-On the **external 2026 test set**, all three models show R² values within approximately 0.02 of each other. The performance gap between models collapses under temporal distribution shift — a well-known phenomenon where distributional drift erodes model-specific advantages. All three models show comparable degradation from internal to external validation, indicating that the drop is driven by temporal drift rather than model-specific overfitting.
+On the **external 2026 test set**, all three models show R² values within approximately 0.02 of each other. The performance gap between models collapses under temporal distribution shift, a well-known phenomenon where distributional drift erodes model-specific advantages. All three models show comparable degradation from internal to external validation, indicating that the drop is driven by temporal drift rather than model-specific overfitting.
 
 The following table summarizes the regression metrics under both evaluation protocols:
 
@@ -218,7 +218,7 @@ The following table summarizes the regression metrics under both evaluation prot
 | **Random Forest** | **0.657** | 0.574 | **0.1111** | 0.1217 |
 | Linear Regression | 0.514 | 0.592 | 0.1330 | 0.1183 |
 
-On the internal 20% holdout, Random Forest achieves the highest R² (0.657) and lowest MAE (0.111), outperforming XGBoost and Linear Regression by a meaningful margin. On the external 2026 test, all three models converge to R² values between 0.574 and 0.592 — a range of only 0.018 — confirming that the performance gap collapses under temporal distribution shift.
+On the internal 20% holdout, Random Forest achieves the highest R² (0.657) and lowest MAE (0.111), outperforming XGBoost and Linear Regression by a meaningful margin. On the external 2026 test, all three models converge to R² values between 0.574 and 0.592, a range of only 0.018, confirming that the performance gap collapses under temporal distribution shift.
 
 **Final model selection: Random Forest** — justified by:
 
@@ -234,15 +234,15 @@ On the internal 20% holdout, Random Forest achieves the highest R² (0.657) and 
 
 The Random Forest feature importances reveal that **historical mean features dominate prediction**:
 
-1. **blockface_hour_mean** — the strongest predictor by a wide margin. Knowing the typical occupancy for this specific block at this specific hour is highly predictive of actual demand.
-2. **blockface_mean** — the overall blockface baseline provides a strong prior.
-3. **blockface_dow_mean** — the day-of-week profile per block contributes significant additional signal.
-4. **hour, hour_sin, hour_cos** — time-of-day features contribute after controlling for block-level means.
-5. **dow, dow_sin, dow_cos** — day-of-week contributes at moderate importance.
-6. **is_weekend, is_fri_pm** — binary demand-regime indicators capture non-linear day-type effects.
-7. **block_id** — raw block identity provides residual spatial signal.
-8. **temp_c, precip_mm, is_rainy** — weather features contribute at lower importance levels.
-9. **is_holiday, is_holiday_eve** — low importance due to infrequency in the training set.
+1. **blockface_hour_mean** : the strongest predictor by a wide margin. Knowing the typical occupancy for this specific block at this specific hour is highly predictive of actual demand.
+2. **blockface_mean** : the overall blockface baseline provides a strong prior.
+3. **blockface_dow_mean** : the day-of-week profile per block contributes significant additional signal.
+4. **hour, hour_sin, hour_cos** : time-of-day features contribute after controlling for block-level means.
+5. **dow, dow_sin, dow_cos** : day-of-week contributes at moderate importance.
+6. **is_weekend, is_fri_pm** : binary demand-regime indicators capture non-linear day-type effects.
+7. **block_id** : raw block identity provides residual spatial signal.
+8. **temp_c, precip_mm, is_rainy** : weather features contribute at lower importance levels.
+9. **is_holiday, is_holiday_eve** : low importance due to infrequency in the training set.
 
 This ranking validates the key feature engineering decision: the most predictive value came from location-specific historical demand priors (the three blockface mean lookups), not from raw temporal features alone.
 
@@ -251,7 +251,7 @@ This ranking validates the key feature engineering decision: the most predictive
 
 ### 4.6 Classification Performance
 
-After thresholding continuous predictions at 0.40 and 0.70, the confusion matrix shows strong per-category performance. Low and High occupancy periods are classified with high precision and recall. The most common misclassification is between Medium and the adjacent categories — expected given that the Medium band (40–70%) is defined by two soft boundaries and is inherently the most ambiguous demand state. Overall classification accuracy substantially exceeds the majority-class baseline.
+After thresholding continuous predictions at 0.40 and 0.70, the confusion matrix shows strong per-category performance. Low and High occupancy periods are classified with high precision and recall. The most common misclassification is between Medium and the adjacent categories (expected given that the Medium band (40–70%) is defined by two soft boundaries and is inherently the most ambiguous demand state). Overall classification accuracy substantially exceeds the majority-class baseline.
 
 ![Figure 9: Random Forest confusion matrix — threshold-based classification](images/fig9_confusion_matrix.png)
 *Figure 9: Confusion matrix for threshold-based occupancy category classification (Low / Medium / High). The diagonal shows correct predictions: 19,903 Low, 10,181 Medium, 2,018 High. Most errors occur at Low↔Medium and Medium↔High boundaries.*
@@ -317,7 +317,7 @@ The Overview tab provides a high-level dashboard derived from 2023 training data
 - **By-day-of-week bar chart**: Comparative weekly demand profile.
 - **By-hour bar chart**: Intraday demand profile showing AM, lunch, and PM peaks.
 
-A note explains that Sunday data is absent because Seattle paid parking is free on Sundays — a systematic absence rather than a data quality issue.
+A note explains that Sunday data is absent because Seattle paid parking is free on Sundays, a systematic absence rather than a data quality issue.
 
 ### 5.4 Tab 3 — Predict
 
@@ -360,13 +360,13 @@ This project successfully developed an end-to-end parking occupancy prediction s
 
 The key contributions are:
 
-1. A **robust preprocessing pipeline** handling large-scale tabular data through chunked reading, hourly aggregation, anomaly removal, and stratified sampling — with historical mean features computed from the full dataset before sampling to prevent statistical bias.
+1. A **robust preprocessing pipeline** handling large-scale tabular data through chunked reading, hourly aggregation, anomaly removal, and stratified sampling, with historical mean features computed from the full dataset before sampling to prevent statistical bias.
 
-2. A **rich 20-feature representation** combining cyclic temporal encoding, location-specific historical demand priors, holiday calendars, and weather data — capturing the primary drivers of parking demand.
+2. A **rich 20-feature representation** combining cyclic temporal encoding, location-specific historical demand priors, holiday calendars, and weather data, capturing the primary drivers of parking demand.
 
 3. A **thorough dual-validation protocol** using both a 20% internal holdout and an external 3-year-gap temporal test set, providing honest bounds on expected real-world performance.
 
-4. A **feature-rich Streamlit application** with interactive map, batch prediction, destination routing, daily animation, and full EDA — all served from precomputed artifacts for instant startup.
+4. A **feature-rich Streamlit application** with interactive map, batch prediction, destination routing, daily animation, and full EDA, all served from precomputed artifacts for instant startup.
 
 Random Forest is the best model on internal validation and was selected as the production model. The observed R² degradation on the external 2026 test is attributable to temporal distribution shift across the 3-year gap, not model inadequacy.
 
