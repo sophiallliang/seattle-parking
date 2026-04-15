@@ -34,11 +34,11 @@ with st.sidebar:
     st.caption("Project: DS capstone · Belltown")
 
 # ── Download models.joblib from Google Drive if missing ──────
-MODELS_GDRIVE_URL = "https://drive.google.com/file/d/1ifvvbXqQ9TycQkCTeZ28DpxBKJ1TRM1q/view?usp=drive_link"
+MODELS_GDRIVE_ID = "1ifvvbXqQ9TycQkCTeZ28DpxBKJ1TRM1q"
 
 if not os.path.exists("models.joblib"):
     with st.spinner("Downloading models... (first run only, ~1 min)"):
-        gdown.download(MODELS_GDRIVE_URL, "models.joblib", fuzzy=True, quiet=False)
+        gdown.download(id=MODELS_GDRIVE_ID, output="models.joblib", quiet=False)
 
 # ── Load all artifacts ───────────────────────────────────────
 with st.spinner("Loading models and data..."):
