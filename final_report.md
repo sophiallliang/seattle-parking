@@ -266,7 +266,7 @@ After thresholding continuous predictions at 0.40 and 0.70, the confusion matrix
 
 ## 5. Application Description
 
-The trained models and precomputed artifacts are served through a **five-tab Streamlit web application**. The app targets two audiences: (1) **drivers** seeking a quick parking forecast before driving to Belltown, and (2) **analysts** reviewing historical patterns and model behavior.
+The trained models and precomputed artifacts are served through a **five-tab Streamlit web application**, publicly accessible at: **https://belltown-parking.streamlit.app/**. The app targets two audiences: (1) **drivers** seeking a quick parking forecast before driving to Belltown, and (2) **analysts** reviewing historical patterns and model behavior.
 
 ### 5.1 Deployment Architecture
 
