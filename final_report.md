@@ -6,7 +6,7 @@
 
 ## 1. Introduction
 
-Urban parking scarcity is one of the most persistent and costly challenges in modern cities. In Seattle's Belltown neighborhood, a dense & mixed-use district adjacent to downtown, drivers frequently circle blocks searching for available street parking, contributing to traffic congestion, increased emissions, and driver frustration. Studies by INRIX estimate that American drivers spend an average of 17 hours per year searching for parking, at a combined annual cost of roughly $345 per driver. In high-demand urban cores like Belltown, this figure is considerably higher.
+Urban parking scarcity is one of the most persistent and costly challenges in modern cities. In Seattle's Belltown neighborhood, a dense and mixed-use district adjacent to downtown, drivers frequently circle blocks searching for available street parking, contributing to traffic congestion, increased emissions, and driver frustration. Studies by INRIX estimate that American drivers spend an average of 17 hours per year searching for parking, at a combined annual cost of roughly $345 per driver. In high-demand urban cores like Belltown, this figure is considerably higher.
 
 The City of Seattle operates a paid on-street parking system managed by the Seattle Department of Transportation (SDOT), which records real-time occupancy data from thousands of blockface sensors across the city. This dataset, openly published on the Seattle Open Data portal, provides a unique opportunity to apply machine learning techniques to a problem with direct civic impact: predicting how full a given parking block will be at a given time.
 
