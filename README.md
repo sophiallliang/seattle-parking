@@ -2,31 +2,29 @@
 
 Predicts parking occupancy in Seattle's Belltown neighborhood using 2023 historical data. Built with Streamlit.
 
-## Setup
+## Live App
+
+**https://belltown-parking.streamlit.app/**
+
+The app may take a minute to load as it wakes up from sleep. If it doesn't load, run it locally using the instructions below.
+
+## Run Locally (final-report branch)
 
 ```bash
-git clone https://github.com/sophialiang/seattle-parking.git
+git clone https://github.khoury.northeastern.edu/sophialiang/seattle-parking.git
 cd seattle-parking
+git checkout final-report
 pip install -r requirements.txt
-```
-
-## Data files needed
-
-Place these two CSV files in the project root (get from Yimei via Google Drive):
-
-- `belltown_2023_full.csv` — 2023 full year training data
-- `belltown_last30days.csv` — last 30 days test data
-
-## Run
-
-```bash
 streamlit run app.py
 ```
 
-## App tabs
+`models.joblib` will be downloaded automatically from Google Drive on first run.
+
+## App Tabs
 
 | Tab      | Description                                          |
 | -------- | ---------------------------------------------------- |
+| Map      | Interactive map with batch occupancy predictions     |
 | Overview | Daily trends, peak hours, busiest days               |
 | Predict  | Select block + time + weather → occupancy prediction |
 | Explore  | Heatmaps, distributions, weekday vs weekend          |
